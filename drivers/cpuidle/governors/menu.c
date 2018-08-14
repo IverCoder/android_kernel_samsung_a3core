@@ -361,8 +361,12 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 		 * result of it.  In that case say we might mispredict and use
 		 * the known time till the closest timer event for the idle
 		 * state selection.
+		 * result of it.  In that case say we might mispredict and use
+		 * the known time till the closest timer event for the idle
+		 * state selection.
 		 */
 		if (data->predicted_us < TICK_USEC)
+			data->predicted_us = ktime_to_us(delta_next);
 			data->predicted_us = ktime_to_us(delta_next);
 	} else {
 		/*
@@ -437,10 +441,13 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	 */
 	if (((drv->states[idx].flags & CPUIDLE_FLAG_POLLING) ||
 	     expected_interval < TICK_USEC) && !tick_nohz_tick_stopped()) {
+	if (((drv->states[idx].flags & CPUIDLE_FLAG_POLLING) ||
+	     expected_interval < TICK_USEC) && !tick_nohz_tick_stopped()) {
 		unsigned int delta_next_us = ktime_to_us(delta_next);
 
 		*stop_tick = false;
 
+		if (idx > 0 && drv->states[idx].target_residency > delta_next_us) {
 		if (idx > 0 && drv->states[idx].target_residency > delta_next_us) {
 			/*
 			 * The tick is not going to be stopped and the target
@@ -460,6 +467,7 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 		}
 	}
 
+out:
 out:
 	data->last_state_idx = idx;
 
