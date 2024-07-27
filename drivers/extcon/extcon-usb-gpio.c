@@ -28,7 +28,8 @@
 #include <linux/workqueue.h>
 #include <linux/pinctrl/consumer.h>
 
-#define USB_GPIO_DEBOUNCE_MS	20	/* ms */
+#define USB_GPIO_DEBOUNCE_MS	520	/* ms */
+#define USB_ID_GPIO_DEBOUNCE_MS	20	/* ms */
 
 struct usb_extcon_info {
 	struct device *dev;
@@ -66,6 +67,8 @@ static const unsigned int usb_extcon_cable[] = {
  * - VBUS only - we want to distinguish between [1] and [2], so ID is always 1.
  * - ID only - we want to distinguish between [1] and [4], so VBUS = ID.
 */
+
+int extcon_gpio_id = 0;
 static void usb_extcon_detect_cable(struct work_struct *work)
 {
 	int id, vbus;
@@ -79,23 +82,25 @@ static void usb_extcon_detect_cable(struct work_struct *work)
 	vbus = info->vbus_gpiod ?
 		gpiod_get_value_cansleep(info->vbus_gpiod) : id;
 
+	extcon_gpio_id = id;
+    printk("##%s## -typec-: id=%d, vbus=%d\n", __func__, id, vbus);
 	/* at first we clean states which are no longer active */
 	if (id)
 		extcon_set_state_sync(info->edev, EXTCON_USB_HOST, false);
 	if (!vbus)
 		extcon_set_state_sync(info->edev, EXTCON_USB, false);
 
-	if (!id) {
+	if (!id)
 		extcon_set_state_sync(info->edev, EXTCON_USB_HOST, true);
-	} else {
-		if (vbus)
-			extcon_set_state_sync(info->edev, EXTCON_USB, true);
-	}
+	if (vbus)
+		extcon_set_state_sync(info->edev, EXTCON_USB, true);
 }
 
 static irqreturn_t usb_irq_handler(int irq, void *dev_id)
 {
 	struct usb_extcon_info *info = dev_id;
+
+	printk("##%s## -enter-", __func__);
 
 	queue_delayed_work(system_power_efficient_wq, &info->wq_detcable,
 			   info->debounce_jiffies);
@@ -147,7 +152,7 @@ static int usb_extcon_probe(struct platform_device *pdev)
 
 	if (info->id_gpiod)
 		ret = gpiod_set_debounce(info->id_gpiod,
-					 USB_GPIO_DEBOUNCE_MS * 1000);
+					 USB_ID_GPIO_DEBOUNCE_MS * 1000);
 	if (!ret && info->vbus_gpiod)
 		ret = gpiod_set_debounce(info->vbus_gpiod,
 					 USB_GPIO_DEBOUNCE_MS * 1000);

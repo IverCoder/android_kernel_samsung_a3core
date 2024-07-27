@@ -115,7 +115,11 @@ static int sprd_hwspinlock_probe(struct platform_device *pdev)
 		return PTR_ERR(sprd_hwlock->clk);
 	}
 
-	clk_prepare_enable(sprd_hwlock->clk);
+	ret = clk_prepare_enable(sprd_hwlock->clk);
+	if (ret) {
+		dev_err(&pdev->dev, "hwspinlock clock enable failed\n");
+		return ret;
+	}
 
 	/* set the hwspinlock to record user id to identify subsystems */
 	writel(HWSPINLOCK_USER_BITS, sprd_hwlock->base + HWSPINLOCK_RECCTRL);
@@ -151,6 +155,9 @@ static int sprd_hwspinlock_remove(struct platform_device *pdev)
 
 static const struct of_device_id sprd_hwspinlock_of_match[] = {
 	{ .compatible = "sprd,hwspinlock-r3p0", },
+	{ .compatible = "sprd,sharkl5-hwspinlock", },
+	{ .compatible = "sprd,roc1-hwspinlock", },
+	{ .compatible = "sprd,orca-hwspinlock", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sprd_hwspinlock_of_match);

@@ -86,7 +86,7 @@ static struct page *ion_page_pool_remove(struct ion_page_pool *pool, bool high)
 	return page;
 }
 
-struct page *ion_page_pool_alloc(struct ion_page_pool *pool)
+struct page *ion_page_pool_alloc(struct ion_page_pool *pool, bool *from_pool)
 {
 	struct page *page = NULL;
 
@@ -99,8 +99,12 @@ struct page *ion_page_pool_alloc(struct ion_page_pool *pool)
 		page = ion_page_pool_remove(pool, false);
 	mutex_unlock(&pool->mutex);
 
-	if (!page)
+	if (!page) {
 		page = ion_page_pool_alloc_pages(pool);
+		*from_pool = false;
+	} else {
+		*from_pool = true;
+	}
 
 	return page;
 }
@@ -126,13 +130,17 @@ static int ion_page_pool_total(struct ion_page_pool *pool, bool high)
 	return count << pool->order;
 }
 
-long ion_page_pool_nr_pages(void)
+int ion_page_pool_nr_pages(struct ion_page_pool *pool)
 {
-	/* Correct possible overflow caused by racing writes */
-	if (nr_total_pages < 0)
-		nr_total_pages = 0;
-	return nr_total_pages;
+	int ion_pool_total_pages;
+
+	mutex_lock(&pool->mutex);
+	ion_pool_total_pages = ion_page_pool_total(pool, true);
+	mutex_unlock(&pool->mutex);
+
+	return ion_pool_total_pages;
 }
+EXPORT_SYMBOL_GPL(ion_page_pool_nr_pages);
 
 int ion_page_pool_shrink(struct ion_page_pool *pool, gfp_t gfp_mask,
 			 int nr_to_scan)

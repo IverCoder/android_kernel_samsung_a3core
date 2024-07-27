@@ -17,12 +17,6 @@
 
 #include "pcie-designware.h"
 
-/* PCIe Port Logic registers */
-#define PLR_OFFSET			0x700
-#define PCIE_PHY_DEBUG_R1		(PLR_OFFSET + 0x2c)
-#define PCIE_PHY_DEBUG_R1_LINK_UP	(0x1 << 4)
-#define PCIE_PHY_DEBUG_R1_LINK_IN_TRAINING	(0x1 << 29)
-
 int dw_pcie_read(void __iomem *addr, int size, u32 *val)
 {
 	if ((uintptr_t)addr & (size - 1)) {
@@ -319,13 +313,16 @@ int dw_pcie_wait_for_link(struct dw_pcie *pci)
 	/* check if the link is up or not */
 	for (retries = 0; retries < LINK_WAIT_MAX_RETRIES; retries++) {
 		if (dw_pcie_link_up(pci)) {
-			dev_info(pci->dev, "link up\n");
+			dev_info(pci->dev, "link up by %d times\n", retries);
 			return 0;
 		}
 		usleep_range(LINK_WAIT_USLEEP_MIN, LINK_WAIT_USLEEP_MAX);
 	}
 
 	dev_err(pci->dev, "phy link never came up\n");
+	dev_err(pci->dev, "link status: [0x%x]: 0x%x, [0x%x]: 0x%x\n",
+		PCIE_PHY_DEBUG_R0, dw_pcie_readl_dbi(pci, PCIE_PHY_DEBUG_R0),
+		PCIE_PHY_DEBUG_R1, dw_pcie_readl_dbi(pci, PCIE_PHY_DEBUG_R1));
 
 	return -ETIMEDOUT;
 }

@@ -328,6 +328,13 @@ static int of_thermal_set_trip_temp(struct thermal_zone_device *tz, int trip,
 	if (trip >= data->ntrips || trip < 0)
 		return -EDOM;
 
+/**SI-23414 data->ops==NULL, null pointer dereference add by wangyibo at 2021.10.01
+ * test cmd:adb shell echo 00000000000000000000000000000000000000000 > /sys/devices/virtual/thermal/thermal_zone4/trip_point_0_temp
+ * */
+	if (!data->ops)
+		return -EIO;
+/**SI-23414 end*/
+
 	if (data->ops->set_trip_temp) {
 		int ret;
 

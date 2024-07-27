@@ -518,6 +518,13 @@ config CHARGER_BQ2415X
 	  You'll need this driver to charge batteries on e.g. Nokia
 	  RX-51/N900.
 
+config CHARGER_AW32257
+	tristate "AWINIC AW32257 battery charger driver"
+	depends on I2C
+	help
+	  Say Y to enable support for the AWINIC AW32257 battery charger
+	  PMICs.
+
 config CHARGER_BQ24190
 	tristate "TI BQ24190 battery charger driver"
 	depends on I2C
@@ -609,5 +616,114 @@ config CHARGER_RT9455
 	select REGMAP_I2C
 	help
 	  Say Y to enable support for Richtek RT9455 battery charger.
+
+config CHARGER_SC2703
+	tristate "Spreadtrum Communications SC2703 Charger support"
+	depends on MFD_SC2703 || COMPILE_TEST
+	help
+	  Say Y here to enable support for charger unit of the SC2703 Charger.
+	  This driver can also be built as a module. If so, the module will be
+	  called sc2703-charger.
+
+config CHARGER_SC2731
+	tristate "Spreadtrum SC2731 charger driver"
+	depends on MFD_SC27XX_PMIC || COMPILE_TEST
+	help
+	 Say Y here to enable support for battery charging with SC2731
+	 PMIC chips.
+
+config CHARGER_FAN54015
+	tristate "Fairchild FAN54015 Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for Fairchild FAN54015 Battery Charger.
+
+config CHARGER_ETA6937
+	tristate "ETA solutions ETA6937CSU  Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for ETA Solutions ETA6935CSU Battery Charger.
+
+config CHARGER_BQ2560X
+	tristate "TI BQ2560X Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for TI BQ2560X Battery Charger.
+
+config CHARGER_RT9471
+	tristate "RT9471 Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for RT9471 Battery Charger.
+
+config CHARGER_SGM41511
+	tristate "TI SGM41511 Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for SGM SGM41511 Battery Charger.
+
+config CHARGER_BQ2597X
+	tristate "TI BQ2597X Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for TI BQ2597X Charger.
+
+config CHARGER_BQ25910
+	tristate "TI BQ25910 Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for TI BQ25910 Battery Charger.
+
+config CHARGER_SC2720
+	tristate "Spreadtrum SC2720 charger driver"
+	depends on MFD_SC27XX_PMIC || COMPILE_TEST
+	help
+	  Say Y here to enable support for battery charging with SC2720
+	  PMIC chips.
+
+config CHARGER_SC2721
+	tristate "Spreadtrum SC2721 charger driver"
+	depends on MFD_SC27XX_PMIC || COMPILE_TEST
+	help
+	  Say Y here to enable support for battery charging with SC2721
+	  PMIC chips.
+
+config WIRELESS_CHARGER_NU1619
+	tristate "NU1619 Wireless Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for NoVolta NU619 Wireless charger.
+
+config WIRELESS_CHARGER_SY65153
+	tristate "SY65153 Wireless Charger"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for Silergy sy65153 Wireless charger.
+
+config WIRELESS_CHARGE_PUMPS_CONVERTER_HL1506
+	tristate "Halo wireless charge pump converter hl1506"
+	depends on I2C || COMPILE_TEST
+	help
+	  Say Y to include support for Halo hl1506 wireless charge pump converter.
+
+config FUEL_GAUGE_SC27XX
+	tristate "Spreadtrum SC27XX fuel gauge driver"
+	depends on MFD_SC27XX_PMIC || MFD_UMP96XX_PMIC || COMPILE_TEST
+	help
+	  Say Y here to enable support for fuel gauge with SC27XX
+	  PMIC chips.
+
+config FAST_CHARGER_SC2730
+	tristate "Spreadtrum SC2730 fast charger driver"
+	depends on MFD_SC27XX_PMIC || MFD_UMP96XX_PMIC || COMPILE_TEST
+	help
+	  Say Y here to enable support for fast charging with SC2730
+	  PMIC chips.
+
+config SPRD_SUPPLY_GCOV
+	bool "open gcov for supply"
+	depends on GCOV_PROFILE_MODULES
+	help
+	  Say Y here to enable gcov in supply.
 
 endif # POWER_SUPPLY

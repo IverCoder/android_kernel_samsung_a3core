@@ -61,6 +61,7 @@ struct fscrypt_info;
 struct fscrypt_operations;
 struct fsverity_info;
 struct fsverity_operations;
+struct file_ra_state;
 
 extern void __init inode_init(void);
 extern void __init inode_init_early(void);
@@ -76,6 +77,7 @@ extern int sysctl_protected_symlinks;
 extern int sysctl_protected_hardlinks;
 extern int sysctl_protected_fifos;
 extern int sysctl_protected_regular;
+extern void ra_pages_sync(struct file_ra_state *ra, struct address_space *mapping);
 
 typedef __kernel_rwf_t rwf_t;
 
@@ -848,6 +850,7 @@ struct file_ra_state {
 					   there are only # of pages ahead */
 
 	unsigned int ra_pages;		/* Maximum readahead window */
+	int seq_read_fact;              /* turbo factor of sequential read */
 	unsigned int mmap_miss;		/* Cache miss stat for mmap accesses */
 	loff_t prev_pos;		/* Cache last read() position */
 };
@@ -860,6 +863,19 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 	return (index >= ra->start &&
 		index <  ra->start + ra->size);
 }
+
+/*
+ * ra->seq_read_fact == -1 indicates eio happens
+ */
+#define RA_PAGES(ra)                           \
+	({                                             \
+		unsigned int ra_pages;                  \
+		if (ra->seq_read_fact != -1)            \
+			ra_pages = ra->ra_pages * ra->seq_read_fact;    \
+		else                                    \
+			ra_pages = ra->ra_pages;        \
+			ra_pages;                               \
+	})
 
 struct file {
 	union {
@@ -2232,6 +2248,7 @@ extern int thaw_super(struct super_block *super);
 extern bool our_mnt(struct vfsmount *mnt);
 extern __printf(2, 3)
 int super_setup_bdi_name(struct super_block *sb, char *fmt, ...);
+int sec_super_setup_bdi_name(struct super_block *sb, char *fmt, ...);
 extern int super_setup_bdi(struct super_block *sb);
 
 extern int current_umask(void);
@@ -2736,6 +2753,7 @@ static inline ssize_t generic_write_sync(struct kiocb *iocb, ssize_t count)
 
 extern void emergency_sync(void);
 extern void emergency_remount(void);
+extern int intr_sync(int *);
 #ifdef CONFIG_BLOCK
 extern sector_t bmap(struct inode *, sector_t);
 #endif
@@ -3075,7 +3093,9 @@ extern void inode_set_flags(struct inode *inode, unsigned int flags,
 extern const struct file_operations generic_ro_fops;
 
 #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
-
+#ifdef CONFIG_EXT4_RESERVE_SPACE_FILTER
+extern bool check_have_permission(int log_print);
+#endif
 extern int readlink_copy(char __user *, int, const char *);
 extern int page_readlink(struct dentry *, char __user *, int);
 extern const char *page_get_link(struct dentry *, struct inode *,
@@ -3286,6 +3306,8 @@ static inline int kiocb_set_rw_flags(struct kiocb *ki, rwf_t flags)
 		ki->ki_flags |= IOCB_DSYNC;
 	if (flags & RWF_SYNC)
 		ki->ki_flags |= (IOCB_DSYNC | IOCB_SYNC);
+	if (flags & RWF_APPEND)
+		ki->ki_flags |= IOCB_APPEND;
 	return 0;
 }
 

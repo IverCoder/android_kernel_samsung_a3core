@@ -219,6 +219,44 @@ extern cpumask_var_t			cpu_isolated_map;
 
 extern void scheduler_tick(void);
 
+#ifdef CONFIG_SPRD_CORE_CTL
+extern int sched_isolate_count(const cpumask_t *mask, bool include_offline);
+extern int sched_isolate_cpu(int cpu);
+extern int sched_unisolate_cpu(int cpu);
+extern int sched_unisolate_cpu_unlocked(int cpu);
+extern int ctrl_max_min_core_api(unsigned int cpu_num,
+				int type, unsigned int cluster_id);
+extern int ctrl_core_api(struct cpumask *target, int type);
+#else
+static inline int sched_isolate_count(const cpumask_t *mask,
+				      bool include_offline)
+{
+	cpumask_t count_mask;
+
+	if (include_offline)
+		cpumask_andnot(&count_mask, mask, cpu_online_mask);
+	else
+		return 0;
+
+	return cpumask_weight(&count_mask);
+}
+
+static inline int sched_isolate_cpu(int cpu)
+{
+	return 0;
+}
+
+static inline int sched_unisolate_cpu(int cpu)
+{
+	return 0;
+}
+
+static inline int sched_unisolate_cpu_unlocked(int cpu)
+{
+	return 0;
+}
+#endif
+
 #define	MAX_SCHEDULE_TIMEOUT		LONG_MAX
 
 extern long schedule_timeout(long timeout);
@@ -463,6 +501,8 @@ struct sched_entity {
 	u64				sum_exec_runtime;
 	u64				vruntime;
 	u64				prev_sum_exec_runtime;
+	u64				s_sum_exec_runtime;
+	u64				b_sum_exec_runtime;
 
 	u64				nr_migrations;
 
@@ -489,7 +529,7 @@ struct sched_entity {
 };
 
 #ifdef CONFIG_SCHED_WALT
-#define RAVG_HIST_SIZE_MAX  5
+#define RAVG_HIST_SIZE_MAX  6
 
 /* ravg represents frequency scaled cpu-demand of tasks */
 struct ravg {
@@ -516,7 +556,7 @@ struct ravg {
 	 * statistics (rq->prev_runnable_sum) in previous window
 	 */
 	u64 mark_start;
-	u32 sum, demand;
+	u32 sum, demand, sum_latest;
 	u32 sum_history[RAVG_HIST_SIZE_MAX];
 	u32 curr_window, prev_window;
 	u16 active_windows;

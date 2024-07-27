@@ -141,13 +141,15 @@ static void rfkill_led_trigger_event(struct rfkill *rfkill)
 		led_trigger_event(trigger, LED_FULL);
 }
 
-static void rfkill_led_trigger_activate(struct led_classdev *led)
+static int rfkill_led_trigger_activate(struct led_classdev *led)
 {
 	struct rfkill *rfkill;
 
 	rfkill = container_of(led->trigger, struct rfkill, led_trigger);
 
 	rfkill_led_trigger_event(rfkill);
+
+	return 0;
 }
 
 const char *rfkill_get_led_trigger_name(struct rfkill *rfkill)
@@ -202,9 +204,10 @@ static void rfkill_any_led_trigger_event(void)
 	schedule_work(&rfkill_any_work);
 }
 
-static void rfkill_any_led_trigger_activate(struct led_classdev *led_cdev)
+static int rfkill_any_led_trigger_activate(struct led_classdev *led_cdev)
 {
 	rfkill_any_led_trigger_event();
+	return 0;
 }
 
 static int rfkill_any_led_trigger_register(void)

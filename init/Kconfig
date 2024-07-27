@@ -60,7 +60,6 @@ config INIT_ENV_ARG_LIMIT
 	  Maximum of each of the number of arguments and environment
 	  variables passed to init from the kernel command line.
 
-
 config CROSS_COMPILE
 	string "Cross-compiler tool prefix"
 	help
@@ -779,6 +778,11 @@ config MEMCG_SWAP_ENABLED
 	  select this option (if, for some reason, they need to disable it
 	  then swapaccount=0 does the trick).
 
+config MEMCG_FORCE_USE_VM_SWAPPINESS
+	bool "Force to use vm_swappiness instead of memcg->swappiness"
+	depends on MEMCG_SWAP
+	default y
+
 config BLK_CGROUP
 	bool "IO controller"
 	depends on BLOCK
@@ -1089,6 +1093,32 @@ config DEFAULT_USE_ENERGY_AWARE
 	  via sysctl.
 
 	  Say N if unsure.
+
+config SPRD_CORE_CTL
+	bool "Sprd cpu core controller"
+	depends on SMP
+	default n
+	help
+	This option enables cpu isolation, which implement an interface to
+	userspace to isolate cpu dynamically, the isolated cpu will be
+	unavailable to scheduler and load balancer, and all its non-pinned
+	timers, IRQs and tasks will be migrated to other cpus, only pinned
+	kthread and IRQS are still allowed to run, this achieve similar
+	effect as hotplug but at lower latency cost.
+
+config SPRD_CORE_CTL_GCOV
+	bool "open gcov for core ctl feature"
+	depends on SPRD_CORE_CTL && GCOV_PROFILE_MODULES
+	default n
+	help
+	 say Y here to open gcov for core ctl feature.
+
+config SPRD_SCHED_GCOV
+	bool "open gcov for sched"
+	depends on GCOV_PROFILE_MODULES
+	default n
+	help
+	 say Y here to open gcov for sched.
 
 config SYSFS_DEPRECATED
 	bool "Enable deprecated sysfs features to support old userspace tools"

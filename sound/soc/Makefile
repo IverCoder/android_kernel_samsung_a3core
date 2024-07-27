@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
+ifeq ($(strip $(SEC_SAMSUNG_EXPERIENCE_PLATFORM_CATEGORY)),FACTORY)
+LOCAL_CFLAGS += -DLCT_BUILD_TYPE_A03CORE_FACTORY
+endif
+
 snd-soc-core-objs := soc-core.o soc-dapm.o soc-jack.o soc-cache.o soc-utils.o
 snd-soc-core-objs += soc-pcm.o soc-io.o soc-devres.o soc-ops.o
 snd-soc-core-$(CONFIG_SND_SOC_COMPRESS) += soc-compress.o
@@ -52,3 +56,4 @@ obj-$(CONFIG_SND_SOC)	+= txx9/
 obj-$(CONFIG_SND_SOC)	+= ux500/
 obj-$(CONFIG_SND_SOC)	+= xtensa/
 obj-$(CONFIG_SND_SOC)	+= zte/
+obj-$(CONFIG_SND_SOC)	+= sprd/

@@ -82,6 +82,14 @@ config CORESIGHT_SOURCE_ETM4X
 	  for instruction level tracing. Depending on the implemented version
 	  data tracing may also be available.
 
+config CORESIGHT_APETB
+	bool "CoreSight APETB driver"
+	depends on CORESIGHT_SOURCE_ETM4X
+	select CORESIGHT_LINKS_AND_SINKS
+	help
+	  This driver provides support for ylog control APETB function, will automatic
+	  call enable_sink and enable_source.
+
 config CORESIGHT_DYNAMIC_REPLICATOR
 	bool "CoreSight Programmable Replicator driver"
 	depends on CORESIGHT_LINKS_AND_SINKS
@@ -114,5 +122,19 @@ config CORESIGHT_CPU_DEBUG
 	  needs to ensure the clock domain and power domain are enabled
 	  properly, please refer Documentation/trace/coresight-cpu-debug.txt
 	  for detailed description and the example for usage.
+
+config SPRD_CORESIGHT_GCOV
+	bool "open gcov for coresight"
+	depends on GCOV_PROFILE_MODULES
+	help
+	  Say Y here to enable gcov in coresight.
+
+config CORESIGHT_TMC_GROUP
+	bool "CoreSight tmc group drivers"
+	help
+	  This enables support for CoreSight tmc group drivers that are
+	  responsible for dump several tmc data.
+
+source "drivers/hwtracing/coresight/phy/Kconfig"
 
 endif

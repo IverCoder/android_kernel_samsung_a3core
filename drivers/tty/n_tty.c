@@ -2249,7 +2249,9 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
 			}
 
 			uncopied = copy_from_read_buf(tty, &b, &nr);
+			//pr_emerg("copy_from_read_buf1, n= %d\n", uncopied);
 			uncopied += copy_from_read_buf(tty, &b, &nr);
+			//pr_emerg("copy_from_read_buf2, n= %d\n", uncopied);
 			if (uncopied) {
 				retval = -EFAULT;
 				break;

@@ -25,6 +25,7 @@
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
+#include <linux/usb/sprd_usbm.h>
 
 #include "usbaudio.h"
 #include "card.h"
@@ -90,6 +91,40 @@ static snd_pcm_uframes_t snd_usb_pcm_pointer(struct snd_pcm_substream *substream
 	return hwptr_done / (substream->runtime->frame_bits >> 3);
 }
 
+static int sprd_usb_aud_ofld_en(struct snd_usb_audio *chip, int stream)
+{
+	if (stream != SNDRV_PCM_STREAM_PLAYBACK &&
+		stream != SNDRV_PCM_STREAM_CAPTURE) {
+		pr_err("%s invalid stream %d\n", __func__, stream);
+		return 0;
+	}
+
+	if (!chip) {
+		pr_err("%s chip is null stream =%d\n", __func__, stream);
+		return 0;
+	}
+
+	return chip->usb_aud_ofld_en[stream];
+}
+
+static int sprd_ofld_synctype_ignore(struct snd_usb_audio *chip,
+	int stream, int attr)
+{
+	if (!sprd_usb_aud_ofld_en(chip, stream)) {
+		pr_debug("not enable usb audio offload, can't ignore\n");
+		return 0;
+	}
+	if (attr != USB_ENDPOINT_SYNC_SYNC) {
+		pr_debug("offload ignore synctype stream %s sync_type %d\n",
+			stream ? "capture" : "playback", attr);
+		return 1;
+	}
+	pr_debug("stream %s sync_type is %d\n",
+		stream ? "capture" : "playback", attr);
+
+	return 0;
+}
+
 /*
  * find a matching audio format
  */
@@ -98,6 +133,10 @@ static struct audioformat *find_format(struct snd_usb_substream *subs)
 	struct audioformat *fp;
 	struct audioformat *found = NULL;
 	int cur_attr = 0, attr;
+	int ignore;
+	struct snd_usb_audio *chip;
+
+	chip = subs->stream ? subs->stream->chip : NULL;
 
 	list_for_each_entry(fp, &subs->fmt_list, list) {
 		if (!(fp->formats & pcm_format_to_bits(subs->pcm_format)))
@@ -116,6 +155,13 @@ static struct audioformat *find_format(struct snd_usb_substream *subs)
 				continue;
 		}
 		attr = fp->ep_attr & USB_ENDPOINT_SYNCTYPE;
+		ignore = sprd_ofld_synctype_ignore(chip, subs->direction, attr);
+		if (ignore) {
+			pr_debug("ofld_en %d, stream %d, sync_type %#x, ignore this audiofmt\n",
+				sprd_usb_aud_ofld_en(chip, subs->direction),
+				subs->direction, attr);
+			continue;
+		}
 		if (! found) {
 			found = fp;
 			cur_attr = attr;
@@ -1161,6 +1207,17 @@ static int setup_hw_info(struct snd_pcm_runtime *runtime, struct snd_usb_substre
 	unsigned int pt, ptmin;
 	int param_period_time_if_needed;
 	int err;
+
+	/* If usb driver didn't support offload mode, return error, audio hal
+	 * will retry with normal mode
+	 */
+#if IS_ENABLED(CONFIG_SPRD_USBM)
+	struct snd_usb_audio *chip = subs->stream ? subs->stream->chip : NULL;
+
+	pr_info("%s offload check val(%d)\n", __func__, sprd_usbm_hsphy_get_onoff());
+	if (chip && sprd_usb_aud_ofld_en(chip, subs->direction) && !sprd_usbm_hsphy_get_onoff())
+		return -EIO;
+#endif
 
 	runtime->hw.formats = subs->formats;
 

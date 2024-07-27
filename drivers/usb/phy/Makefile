@@ -2,6 +2,8 @@
 #
 # Makefile for physical layer USB drivers
 #
+GCOV_PROFILE := $(CONFIG_SPRD_USB_GCOV)
+
 obj-$(CONFIG_USB_PHY)			+= phy.o
 obj-$(CONFIG_OF)			+= of.o
 obj-$(CONFIG_USB_OTG_WAKELOCK)		+= otg-wakelock.o
@@ -28,3 +30,15 @@ obj-$(CONFIG_USB_MXS_PHY)		+= phy-mxs-usb.o
 obj-$(CONFIG_USB_ULPI)			+= phy-ulpi.o
 obj-$(CONFIG_USB_ULPI_VIEWPORT)		+= phy-ulpi-viewport.o
 obj-$(CONFIG_KEYSTONE_USB_PHY)		+= phy-keystone.o
+obj-$(CONFIG_SPRD_REDRIVER_PTN38003A)	+= ptn38003a-i2c.o
+obj-$(CONFIG_SPRD_SHARKL3_USB2_PHY)     += phy-sprd-sharkl3.o
+obj-$(CONFIG_SPRD_PIKE2_USB2_PHY)       += phy-sprd-pike2.o
+obj-$(CONFIG_SPRD_ROC1_USB2_PHY)        += phy-sprd-roc1.o
+obj-$(CONFIG_SPRD_SHARKLE_USB2_PHY)	+= phy-sprd-sharkle.o
+obj-$(CONFIG_SPRD_SHARKL5_USB2_PHY)	+= phy-sprd-sharkl5.o
+obj-$(CONFIG_SPRD_QOGIRL6_USB2_PHY)	+= phy-sprd-qogirl6.o
+obj-$(CONFIG_SPRD_QOGIRN6PRO_USB2_PHY)	+= phy-sprd-qogirn6pro.o
+obj-$(CONFIG_SPRD_USB3_PHY)		+= phy-sprd-usb3.o
+obj-$(CONFIG_SPRD_ORCA1_USB3_PHY)		+= phy-sprd-orca.o
+obj-$(CONFIG_SPRD_ORCA1_USB3_PHY)		+= phy0-sprd-orca.o
+obj-$(CONFIG_SPRD_QOGIRN6PRO_USB31_PHY)		+= phy-sprd-usb31-qogirn6pro.o

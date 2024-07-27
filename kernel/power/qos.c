@@ -121,6 +121,173 @@ static struct pm_qos_object memory_bandwidth_pm_qos = {
 	.name = "memory_bandwidth",
 };
 
+static BLOCKING_NOTIFIER_HEAD(cluster0_freq_max_notifier);
+static struct pm_qos_constraints cluster0_freq_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster0_freq_max_constraints.list),
+	.target_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster0_freq_max_notifier,
+};
+static struct pm_qos_object cluster0_freq_max_pm_qos = {
+	.constraints = &cluster0_freq_max_constraints,
+	.name = "cluster0_freq_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster0_freq_min_notifier);
+static struct pm_qos_constraints cluster0_freq_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster0_freq_min_constraints.list),
+	.target_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster0_freq_min_notifier,
+};
+static struct pm_qos_object cluster0_freq_min_pm_qos = {
+	.constraints = &cluster0_freq_min_constraints,
+	.name = "cluster0_freq_min",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster1_freq_max_notifier);
+static struct pm_qos_constraints cluster1_freq_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster1_freq_max_constraints.list),
+	.target_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster1_freq_max_notifier,
+};
+static struct pm_qos_object cluster1_freq_max_pm_qos = {
+	.constraints = &cluster1_freq_max_constraints,
+	.name = "cluster1_freq_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster1_freq_min_notifier);
+static struct pm_qos_constraints cluster1_freq_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster1_freq_min_constraints.list),
+	.target_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster1_freq_min_notifier,
+};
+static struct pm_qos_object cluster1_freq_min_pm_qos = {
+	.constraints = &cluster1_freq_min_constraints,
+	.name = "cluster1_freq_min",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster2_freq_max_notifier);
+static struct pm_qos_constraints cluster2_freq_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster2_freq_max_constraints.list),
+	.target_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster2_freq_max_notifier,
+};
+static struct pm_qos_object cluster2_freq_max_pm_qos = {
+	.constraints = &cluster2_freq_max_constraints,
+	.name = "cluster2_freq_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster2_freq_min_notifier);
+static struct pm_qos_constraints cluster2_freq_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster2_freq_min_constraints.list),
+	.target_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_FREQ_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster2_freq_min_notifier,
+};
+static struct pm_qos_object cluster2_freq_min_pm_qos = {
+	.constraints = &cluster2_freq_min_constraints,
+	.name = "cluster2_freq_min",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster0_core_max_notifier);
+static struct pm_qos_constraints cluster0_core_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster0_core_max_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster0_core_max_notifier,
+};
+static struct pm_qos_object cluster0_core_max_pm_qos = {
+	.constraints = &cluster0_core_max_constraints,
+	.name = "cluster0_core_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster0_core_min_notifier);
+static struct pm_qos_constraints cluster0_core_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster0_core_min_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster0_core_min_notifier,
+};
+static struct pm_qos_object cluster0_core_min_pm_qos = {
+	.constraints = &cluster0_core_min_constraints,
+	.name = "cluster0_core_min",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster1_core_max_notifier);
+static struct pm_qos_constraints cluster1_core_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster1_core_max_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster1_core_max_notifier,
+};
+static struct pm_qos_object cluster1_core_max_pm_qos = {
+	.constraints = &cluster1_core_max_constraints,
+	.name = "cluster1_core_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster1_core_min_notifier);
+static struct pm_qos_constraints cluster1_core_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster1_core_min_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster1_core_min_notifier,
+};
+static struct pm_qos_object cluster1_core_min_pm_qos = {
+	.constraints = &cluster1_core_min_constraints,
+	.name = "cluster1_core_min",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster2_core_max_notifier);
+static struct pm_qos_constraints cluster2_core_max_constraints = {
+	.list = PLIST_HEAD_INIT(cluster2_core_max_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MAX_DEFAULT_VALUE,
+	.type = PM_QOS_MIN,
+	.notifiers = &cluster2_core_max_notifier,
+};
+static struct pm_qos_object cluster2_core_max_pm_qos = {
+	.constraints = &cluster2_core_max_constraints,
+	.name = "cluster2_core_max",
+};
+
+static BLOCKING_NOTIFIER_HEAD(cluster2_core_min_notifier);
+static struct pm_qos_constraints cluster2_core_min_constraints = {
+	.list = PLIST_HEAD_INIT(cluster2_core_min_constraints.list),
+	.target_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.default_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.no_constraint_value = PM_QOS_CPU_CORE_MIN_DEFAULT_VALUE,
+	.type = PM_QOS_MAX,
+	.notifiers = &cluster2_core_min_notifier,
+};
+static struct pm_qos_object cluster2_core_min_pm_qos = {
+	.constraints = &cluster2_core_min_constraints,
+	.name = "cluster2_core_min",
+};
 
 static struct pm_qos_object *pm_qos_array[] = {
 	&null_pm_qos,
@@ -128,6 +295,18 @@ static struct pm_qos_object *pm_qos_array[] = {
 	&network_lat_pm_qos,
 	&network_throughput_pm_qos,
 	&memory_bandwidth_pm_qos,
+	&cluster0_freq_max_pm_qos,
+	&cluster0_freq_min_pm_qos,
+	&cluster0_core_max_pm_qos,
+	&cluster0_core_min_pm_qos,
+	&cluster1_freq_max_pm_qos,
+	&cluster1_freq_min_pm_qos,
+	&cluster1_core_max_pm_qos,
+	&cluster1_core_min_pm_qos,
+	&cluster2_freq_max_pm_qos,
+	&cluster2_freq_min_pm_qos,
+	&cluster2_core_max_pm_qos,
+	&cluster2_core_min_pm_qos,
 };
 
 static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
@@ -310,6 +489,14 @@ int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
 	trace_pm_qos_update_target(action, prev_value, curr_value);
+
+	if (c->notifiers)
+		printk(KERN_INFO "%s - %d: %pf %s new_value=%d prev_value=%d curr_value=%d\n",
+			current->comm, current->pid,
+			c->notifiers,
+			action == PM_QOS_ADD_REQ ? "ADD_REQ" : (action == PM_QOS_UPDATE_REQ ? "UPDATE_REQ" : "REMOVE_REQ"),
+			new_value, prev_value, curr_value);
+
 	if (prev_value != curr_value) {
 		ret = 1;
 		if (c->notifiers)
@@ -647,6 +834,8 @@ static ssize_t pm_qos_power_read(struct file *filp, char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	s32 value;
+	char dec_val_buf[2*sizeof(s32)+1];
+	int dec_val_count;
 	unsigned long flags;
 	struct pm_qos_request *req = filp->private_data;
 
@@ -658,8 +847,8 @@ static ssize_t pm_qos_power_read(struct file *filp, char __user *buf,
 	spin_lock_irqsave(&pm_qos_lock, flags);
 	value = pm_qos_get_value(pm_qos_array[req->pm_qos_class]->constraints);
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
-
-	return simple_read_from_buffer(buf, count, f_pos, &value, sizeof(s32));
+	dec_val_count = sprintf(dec_val_buf, "%x\n", value);
+	return simple_read_from_buffer(buf, count, f_pos, dec_val_buf, dec_val_count);
 }
 
 static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
@@ -685,12 +874,12 @@ static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
 	return count;
 }
 
-
 static int __init pm_qos_power_init(void)
 {
 	int ret = 0;
 	int i;
 	struct dentry *d;
+	int cluster_num = topology_physical_package_id(cpumask_weight(cpu_possible_mask) - 1) + 1;
 
 	BUILD_BUG_ON(ARRAY_SIZE(pm_qos_array) != PM_QOS_NUM_CLASSES);
 
@@ -699,6 +888,14 @@ static int __init pm_qos_power_init(void)
 		d = NULL;
 
 	for (i = PM_QOS_CPU_DMA_LATENCY; i < PM_QOS_NUM_CLASSES; i++) {
+		if (cluster_num < 3) {
+			if (i >= PM_QOS_CLUSTER2_FREQ_MAX && i <= PM_QOS_CLUSTER2_CORE_MIN)
+				continue;
+			if (cluster_num < 2) {
+				if (i >= PM_QOS_CLUSTER1_FREQ_MAX && i <= PM_QOS_CLUSTER1_CORE_MIN)
+					continue;
+			}
+		}
 		ret = register_pm_qos_misc(pm_qos_array[i], d);
 		if (ret < 0) {
 			printk(KERN_ERR "pm_qos_param: %s setup failed\n",

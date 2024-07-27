@@ -109,6 +109,8 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_VOLTAGE_BOOT,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_BATT_CURRENT_UA_NOW,
+	POWER_SUPPLY_PROP_BATT_HV_CHARGER_STATUS,
 	POWER_SUPPLY_PROP_CURRENT_AVG,
 	POWER_SUPPLY_PROP_CURRENT_BOOT,
 	POWER_SUPPLY_PROP_POWER_NOW,
@@ -127,6 +129,7 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT,
 	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
 	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
 	POWER_SUPPLY_PROP_ENERGY_EMPTY_DESIGN,
 	POWER_SUPPLY_PROP_ENERGY_FULL,
@@ -150,6 +153,8 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_FULL_AVG,
 	POWER_SUPPLY_PROP_TYPE, /* use power_supply.type instead */
+	POWER_SUPPLY_PROP_USB_TYPE,
+	POWER_SUPPLY_PROP_WIRELESS_TYPE,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_PRECHARGE_CURRENT,
 	POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT,
@@ -158,12 +163,14 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	POWER_SUPPLY_PROP_BATT_SLATE_MODE,
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
+	POWER_SUPPLY_PROP_FEED_WATCHDOG,
 };
 
 enum power_supply_type {
@@ -179,6 +186,42 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_USB_PD,		/* Power Delivery Port */
 	POWER_SUPPLY_TYPE_USB_PD_DRP,		/* PD Dual Role Port */
 	POWER_SUPPLY_TYPE_APPLE_BRICK_ID,	/* Apple Charging Method */
+	POWER_SUPPLY_TYPE_USB_SFCP_1P0,		/* SFCP1.0 Port*/
+	POWER_SUPPLY_TYPE_USB_SFCP_2P0,		/* SFCP2.0 Port*/
+	POWER_SUPPLY_TYPE_WIRELESS,             /* wireless charger*/
+};
+
+enum power_supply_usb_type {
+	POWER_SUPPLY_USB_TYPE_UNKNOWN = 0,
+	POWER_SUPPLY_USB_TYPE_SDP,		/* Standard Downstream Port */
+	POWER_SUPPLY_USB_TYPE_DCP,		/* Dedicated Charging Port */
+	POWER_SUPPLY_USB_TYPE_CDP,		/* Charging Downstream Port */
+	POWER_SUPPLY_USB_TYPE_ACA,		/* Accessory Charger Adapters */
+	POWER_SUPPLY_USB_TYPE_C,		/* Type C Port */
+	POWER_SUPPLY_USB_TYPE_PD,		/* Power Delivery Port */
+	POWER_SUPPLY_USB_TYPE_PD_DRP,		/* PD Dual Role Port */
+	POWER_SUPPLY_USB_TYPE_PD_PPS,		/* PD Programmable Power Supply */
+	POWER_SUPPLY_USB_TYPE_APPLE_BRICK_ID,	/* Apple Charging Method */
+	POWER_SUPPLY_USB_TYPE_SFCP_1P0,		/* SFCP1.0 Port*/
+	POWER_SUPPLY_USB_TYPE_SFCP_2P0,		/* SFCP2.0 Port*/
+};
+
+enum power_supply_wireless_type {
+	POWER_SUPPLY_WIRELESS_TYPE_UNKNOWN = 0x20,
+	POWER_SUPPLY_WIRELESS_TYPE_BPP,		/* Standard wireless bpp mode */
+	POWER_SUPPLY_WIRELESS_TYPE_EPP,		/* Standard wireless epp mode */
+};
+
+enum power_supply_charge_type {
+	USB_CHARGE_TYPE_NORMAL = 0,		/* Charging Power <= 10W*/
+	USB_CHARGE_TYPE_FAST,			/* 10W < Charging Power <= 20W */
+	USB_CHARGE_TYPE_FLASH,			/* 20W < Charging Power <= 30W */
+	USB_CHARGE_TYPE_TURBE,			/* 30W < Charging Power <= 50W */
+	USB_CHARGE_TYPE_SUPER,			/* Charging Power > 50W */
+	WIRELESS_CHARGE_TYPE_NORMAL,
+	WIRELESS_CHARGE_TYPE_FAST,
+	WIRELESS_CHARGE_TYPE_FLASH,
+	CHARGE_MAX,
 };
 
 enum power_supply_notifier_events {
@@ -197,6 +240,8 @@ struct power_supply;
 /* Run-time specific power supply configuration */
 struct power_supply_config {
 	struct device_node *of_node;
+	struct fwnode_handle *fwnode;
+
 	/* Driver private data */
 	void *drv_data;
 
@@ -208,6 +253,8 @@ struct power_supply_config {
 struct power_supply_desc {
 	const char *name;
 	enum power_supply_type type;
+	enum power_supply_usb_type *usb_types;
+	size_t num_usb_types;
 	enum power_supply_property *properties;
 	size_t num_properties;
 
@@ -303,6 +350,49 @@ struct power_supply_info {
 	int use_for_apm;
 };
 
+struct power_supply_battery_ocv_table {
+	int ocv;	/* microVolts */
+	int capacity;	/* percent */
+};
+
+struct power_supply_vol_temp_table {
+	int vol;	/* microVolts */
+	int temp;	/* celsius */
+};
+
+struct power_supply_capacity_temp_table {
+	int temp;	/* celsius */
+	int cap;	/* capacity percentage */
+};
+
+struct power_supply_resistance_temp_table {
+	int temp;	/* celsius */
+	int resistance;	/* internal resistance percentage */
+};
+
+struct power_supply_charge_current {
+	int sdp_limit;
+	int sdp_cur;
+	int dcp_limit;
+	int dcp_cur;
+	int cdp_limit;
+	int cdp_cur;
+	int aca_limit;
+	int aca_cur;
+	int unknown_limit;
+	int unknown_cur;
+	int fchg_limit;
+	int fchg_cur;
+	int flash_limit;
+	int flash_cur;
+	int wl_bpp_cur;
+	int wl_bpp_limit;
+	int wl_epp_cur;
+	int wl_epp_limit;
+};
+
+#define POWER_SUPPLY_OCV_TEMP_MAX 20
+
 /*
  * This is the recommended struct to manage static battery parameters,
  * populated by power_supply_get_battery_info(). Most platform drivers should
@@ -320,6 +410,18 @@ struct power_supply_battery_info {
 	int charge_term_current_ua;	    /* microAmps */
 	int constant_charge_current_max_ua; /* microAmps */
 	int constant_charge_voltage_max_uv; /* microVolts */
+	int factory_internal_resistance_uohm;   /* microOhms */
+	int ocv_temp[POWER_SUPPLY_OCV_TEMP_MAX];/* celsius */
+	struct power_supply_battery_ocv_table *ocv_table[POWER_SUPPLY_OCV_TEMP_MAX];
+	int ocv_table_size[POWER_SUPPLY_OCV_TEMP_MAX];
+	struct power_supply_vol_temp_table *temp_table;
+	struct power_supply_capacity_temp_table *cap_table;
+	struct power_supply_resistance_temp_table *resistance_table;
+	int temp_table_size;
+	int cap_table_size;
+	int resistance_table_size;
+	struct power_supply_charge_current cur;
+	int fchg_ocv_threshold;
 };
 
 extern struct atomic_notifier_head power_supply_notifier;
@@ -342,7 +444,16 @@ devm_power_supply_get_by_phandle(struct device *dev, const char *property)
 #endif /* CONFIG_OF */
 
 extern int power_supply_get_battery_info(struct power_supply *psy,
-					 struct power_supply_battery_info *info);
+					 struct power_supply_battery_info *info, int num);
+extern void power_supply_put_battery_info(struct power_supply *psy,
+					  struct power_supply_battery_info *info);
+extern int power_supply_ocv2cap_simple(struct power_supply_battery_ocv_table *table,
+				       int table_len, int ocv);
+extern struct power_supply_battery_ocv_table *
+power_supply_find_ocv2cap_table(struct power_supply_battery_info *info,
+				int temp, int *table_len);
+extern int power_supply_batinfo_ocv2cap(struct power_supply_battery_info *info,
+					int ocv, int temp);
 extern void power_supply_changed(struct power_supply *psy);
 extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_input_current_limit_from_supplier(

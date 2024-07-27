@@ -45,7 +45,9 @@
 
 #include <linux/kernel.h>
 
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
 #define USB_STORAGE "usb-storage: "
+#endif
 
 #ifdef CONFIG_USB_STORAGE_DEBUG
 void usb_stor_show_command(const struct us_data *us, struct scsi_cmnd *srb);

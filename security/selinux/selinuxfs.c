@@ -31,6 +31,7 @@
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include <linux/ctype.h>
+#include <linux/avc_backtrace.h>
 
 /* selinuxfs pseudo filesystem for exporting the security policy API.
    Based on the proc code and the fs/nfsd/nfsctl.c code. */
@@ -41,6 +42,12 @@
 #include "security.h"
 #include "objsec.h"
 #include "conditional.h"
+
+unsigned int avc_backtrace_enable;
+EXPORT_SYMBOL(avc_backtrace_enable);
+unsigned int avc_dump_all;
+static char avc_backtrace_filter[AVC_BACKTRACE_COMM_LEN] = { 0 };
+char *avc_backtrace_filter_ele[AVC_BACKTRACE_COMM_NUM] = { NULL };
 
 enum sel_inos {
 	SEL_ROOT_INO = 2,
@@ -63,6 +70,8 @@ enum sel_inos {
 	SEL_STATUS,	/* export current status using mmap() */
 	SEL_POLICY,	/* allow userspace to read the in kernel policy */
 	SEL_VALIDATE_TRANS, /* compute validatetrans decision */
+	SEL_BACKTRACE_ENABLE,/* avc backtrace dump stack switch */
+	SEL_BACKTRACE_FILTER,/* avc backtrace dump stack filter by pid */
 	SEL_INO_NEXT,	/* The next inode number to use */
 };
 
@@ -501,6 +510,150 @@ static const struct file_operations sel_policy_ops = {
 	.mmap		= sel_mmap_policy,
 	.release	= sel_release_policy,
 	.llseek		= generic_file_llseek,
+};
+
+static ssize_t sel_read_backtrace_enable(struct file *filp, char __user *buf,
+					size_t count, loff_t *ppos)
+
+{
+	char tmpbuf[TMPBUFLEN];
+	ssize_t length;
+
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", avc_backtrace_enable);
+	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
+}
+
+static ssize_t sel_write_backtrace_enable(struct file *file,
+const char __user *buf,
+size_t count, loff_t *ppos)
+
+{
+	char *page = NULL;
+	ssize_t length;
+	int new_value;
+
+	length = -ENOMEM;
+	if (count >= PAGE_SIZE)
+		goto out1;
+
+	/* No partial writes. */
+	length = -EINVAL;
+	if (*ppos != 0)
+		goto out1;
+
+	length = -ENOMEM;
+	page = (char *)get_zeroed_page(GFP_KERNEL);
+	if (!page)
+		goto out;
+
+	length = -EFAULT;
+	if (copy_from_user(page, buf, count))
+		goto out;
+
+	length = -EINVAL;
+	if (sscanf(page, "%d", &new_value) != 1)
+		goto out;
+
+	if (new_value != avc_backtrace_enable)
+		avc_backtrace_enable = new_value;
+	length = count;
+out:
+	free_page((unsigned long) page);
+out1:
+	return length;
+}
+
+static const struct file_operations sel_backtrace_enable_ops = {
+	.read       = sel_read_backtrace_enable,
+	.write      = sel_write_backtrace_enable,
+};
+
+static ssize_t sel_read_backtrace_filter(struct file *filp, char __user *buf,
+					size_t count, loff_t *ppos)
+
+{
+	char tmpbuf[AVC_BACKTRACE_COMM_LEN];
+	ssize_t length;
+
+	length = scnprintf(tmpbuf, AVC_BACKTRACE_COMM_LEN,
+	"%s", avc_backtrace_filter);
+	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
+}
+
+static ssize_t sel_write_backtrace_filter(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+
+{
+	char *page = NULL;
+	ssize_t length;
+	char *new_value = NULL;
+	int i = 0;
+
+	length = -ENOMEM;
+	if (count >= PAGE_SIZE)
+		goto out1;
+
+	/* No partial writes. */
+	length = -EINVAL;
+	if (*ppos != 0)
+		goto out1;
+
+	length = -ENOMEM;
+	new_value = kmalloc(AVC_BACKTRACE_COMM_LEN, GFP_KERNEL);
+	if (!new_value)
+		goto out;
+
+	length = -ENOMEM;
+	page = (char *)get_zeroed_page(GFP_KERNEL);
+	if (!page)
+		goto out;
+
+	length = -EFAULT;
+	if (copy_from_user(page, buf, count))
+		goto out;
+
+	length = -EINVAL;
+/*
+*Modified for code scaning. SI23345[ANDROID][A3CORE] Heap buffer overflow in backtrace_filter driver (sel_write_backtrace_filter)
+*Jira:KSG_M168_A01-2995
+*	if (sscanf(page, "%s", new_value) != 1)
+*		goto out;
+*/
+	if (count >= AVC_BACKTRACE_COMM_LEN || sscanf(page, "%s", new_value) != 1)
+		goto out;
+
+	if (new_value) {
+		length = -ENOMEM;
+
+		strcpy(avc_backtrace_filter, new_value);
+		if (!strcmp(new_value, "all"))
+			avc_dump_all = 1;
+		else {
+			avc_dump_all = 0;
+
+			for (i = 0; i < AVC_BACKTRACE_COMM_NUM; i++) {
+				if (avc_backtrace_filter_ele[i])
+					avc_backtrace_filter_ele[i] = NULL;
+			}
+			i = 0;
+			while ((i < AVC_BACKTRACE_COMM_NUM) &&
+			(avc_backtrace_filter_ele[i] =
+			strsep(&new_value, ",")) != NULL)
+				i++;
+		}
+	}
+
+	length = count;
+out:
+	free_page((unsigned long) page);
+	kfree(new_value);
+out1:
+	return length;
+}
+
+static const struct file_operations sel_backtrace_filter_ops = {
+	.read       = sel_read_backtrace_filter,
+	.write      = sel_write_backtrace_filter,
 };
 
 static int sel_make_policy_nodes(struct selinux_fs_info *fsi)
@@ -1969,6 +2122,10 @@ static int sel_fill_super(struct super_block *sb, void *data, int silent)
 		[SEL_POLICY] = {"policy", &sel_policy_ops, S_IRUGO},
 		[SEL_VALIDATE_TRANS] = {"validatetrans", &sel_transition_ops,
 					S_IWUGO},
+		[SEL_BACKTRACE_ENABLE] = {"backtrace_enable",
+		&sel_backtrace_enable_ops, S_IRUGO|S_IWUGO},
+		[SEL_BACKTRACE_FILTER] = {"backtrace_filter",
+		&sel_backtrace_filter_ops, S_IRUGO|S_IWUGO},
 		/* last one */ {""}
 	};
 

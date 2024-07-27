@@ -40,6 +40,7 @@
 #include <asm/tls.h>
 #include <asm/system_misc.h>
 #include <asm/opcodes.h>
+#include <asm/stacktrace.h>
 
 
 static const char *handler[]= {
@@ -243,6 +244,30 @@ static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 }
 #endif
 
+int irqsoff_unwind_backtrace(unsigned long *ip)
+{
+	struct stackframe frame;
+	int call_lvl = 0;
+
+	frame.fp = (unsigned long)__builtin_frame_address(0);
+	frame.sp = current_stack_pointer;
+	frame.lr = (unsigned long)__builtin_return_address(0);
+	frame.pc = (unsigned long)irqsoff_unwind_backtrace;
+
+	for (call_lvl = 0; call_lvl < 6; call_lvl++) {
+		int urc;
+
+		urc = unwind_frame(&frame);
+		if (urc < 0)
+			break;
+
+		ip[call_lvl] = frame.pc;
+	}
+
+	return call_lvl;
+}
+EXPORT_SYMBOL(irqsoff_unwind_backtrace);
+
 void show_stack(struct task_struct *tsk, unsigned long *sp)
 {
 	dump_backtrace(NULL, tsk);
@@ -435,7 +460,7 @@ int call_undef_hook(struct pt_regs *regs, unsigned int instr)
 	return fn ? fn(regs, instr) : 1;
 }
 
-asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
+asmlinkage notrace void __exception do_undefinstr(struct pt_regs *regs)
 {
 	unsigned int instr;
 	siginfo_t info;

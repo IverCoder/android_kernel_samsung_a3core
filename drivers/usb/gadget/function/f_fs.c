@@ -758,6 +758,7 @@ static void ffs_user_copy_worker(struct work_struct *work)
 					 io_data->req->actual;
 	bool kiocb_has_eventfd = io_data->kiocb->ki_flags & IOCB_EVENTFD;
 
+	io_data->kiocb->private = NULL;
 	if (io_data->read && ret > 0) {
 		mm_segment_t oldfs = get_fs();
 
@@ -3066,6 +3067,7 @@ static int _ffs_func_bind(struct usb_configuration *c,
 
 	if (likely(super)) {
 		func->function.ss_descriptors = vla_ptr(vlabuf, d, ss_descs);
+		func->function.ssp_descriptors = func->function.ss_descriptors;
 		ss_len = ffs_do_descs(ffs->ss_descs_count,
 				vla_ptr(vlabuf, d, raw_descs) + fs_len + hs_len,
 				d_raw_descs__sz - fs_len - hs_len,

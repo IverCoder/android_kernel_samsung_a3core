@@ -54,6 +54,9 @@
 #define XFRM_INC_STATS(net, field)	((void)(net))
 #endif
 
+#ifdef CONFIG_XFRM_FRAGMENT
+#define XFRM_FRAG_DEFAULT_MTU 1400
+#endif
 
 /* Organization of SPD aka "XFRM rules"
    ------------------------------------
@@ -578,6 +581,8 @@ struct xfrm_policy {
 	refcount_t		refcnt;
 	struct timer_list	timer;
 
+	struct flow_cache_object flo;
+
 	atomic_t		genid;
 	u32			priority;
 	u32			index;
@@ -993,6 +998,7 @@ struct xfrm_dst {
 		struct rt6_info		rt6;
 	} u;
 	struct dst_entry *route;
+	struct flow_cache_object flo;
 	struct xfrm_policy *pols[XFRM_POLICY_TYPE_MAX];
 	int num_pols, num_xfrms;
 	u32 xfrm_genid;
@@ -1257,6 +1263,8 @@ static inline void xfrm_sk_free_policy(struct sock *sk)
 	}
 }
 
+void xfrm_garbage_collect(struct net *net);
+void xfrm_garbage_collect_deferred(struct net *net);
 #else
 
 static inline void xfrm_sk_free_policy(struct sock *sk) {}
@@ -1290,6 +1298,9 @@ static inline int xfrm6_policy_check_reverse(struct sock *sk, int dir,
 					     struct sk_buff *skb)
 {
 	return 1;
+}
+static inline void xfrm_garbage_collect(struct net *net)
+{
 }
 #endif
 
@@ -1542,7 +1553,7 @@ struct xfrm_state *xfrm_state_find(const xfrm_address_t *daddr,
 				   const struct flowi *fl,
 				   struct xfrm_tmpl *tmpl,
 				   struct xfrm_policy *pol, int *err,
-				   unsigned short family, u32 if_id);
+				   unsigned short family);
 struct xfrm_state *xfrm_stateonly_find(struct net *net, u32 mark, u32 if_id,
 				       xfrm_address_t *daddr,
 				       xfrm_address_t *saddr,
@@ -1668,9 +1679,25 @@ int xfrm6_output(struct net *net, struct sock *sk, struct sk_buff *skb);
 int xfrm6_output_finish(struct sock *sk, struct sk_buff *skb);
 int xfrm6_find_1stfragopt(struct xfrm_state *x, struct sk_buff *skb,
 			  u8 **prevhdr);
-
+#ifdef CONFIG_XFRM_FRAGMENT
+int xfrm6_rcv_encap(struct sk_buff *skb, int nexthdr, __be32 spi,
+		    int encap_type);
+extern int ip4_do_xfrm_frag(struct net *net, struct sock *sk,
+			    struct sk_buff *skb,
+			    int pmtu,
+			    int (*output)(struct net *,
+					  struct sock *,
+					  struct sk_buff *));
+extern int ip6_do_xfrm_frag(struct net *net, struct sock *sk,
+			    struct sk_buff *skb,
+			    int pmtu,
+			    int (*output)(struct net *,
+					  struct sock *,
+					  struct sk_buff *));
+#endif
 #ifdef CONFIG_XFRM
 int xfrm4_udp_encap_rcv(struct sock *sk, struct sk_buff *skb);
+int xfrm6_udp_encap_rcv(struct sock *sk, struct sk_buff *skb);
 int xfrm_user_policy(struct sock *sk, int optname,
 		     u8 __user *optval, int optlen);
 #else
@@ -1683,6 +1710,13 @@ static inline int xfrm4_udp_encap_rcv(struct sock *sk, struct sk_buff *skb)
 {
  	/* should not happen */
  	kfree_skb(skb);
+	return 0;
+}
+
+static inline int xfrm6_udp_encap_rcv(struct sock *sk, struct sk_buff *skb)
+{
+	/* should not happen */
+	kfree_skb(skb);
 	return 0;
 }
 #endif

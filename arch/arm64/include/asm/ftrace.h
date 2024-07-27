@@ -13,7 +13,7 @@
 
 #include <asm/insn.h>
 
-#define MCOUNT_ADDR		((unsigned long)_mcount)
+#define MCOUNT_ADDR		((unsigned long)__va_function(_mcount))
 #define MCOUNT_INSN_SIZE	AARCH64_INSN_SIZE
 
 #ifndef __ASSEMBLY__

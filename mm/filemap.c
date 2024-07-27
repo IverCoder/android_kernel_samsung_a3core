@@ -50,6 +50,10 @@
 
 #include <asm/mman.h>
 
+#ifdef CONFIG_PROTECT_LRU
+#include <linux/protect_lru.h>
+#endif
+
 /*
  * Shared mappings implemented 30.11.1994. It's not fully working yet,
  * though.
@@ -759,6 +763,14 @@ static int __add_to_page_cache_locked(struct page *page,
 
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	VM_BUG_ON_PAGE(PageSwapBacked(page), page);
+
+#ifdef CONFIG_PROTECT_LRU
+	/* To tell memcgroup this page is protected,
+	 * so it should be resided in root_mem_cgroup.
+	 */
+	if (current->mm && current->mm->protect > 0)
+		gfp_mask |= __GFP_PROTECT_LRU;
+#endif
 
 	if (!huge) {
 		error = mem_cgroup_try_charge(page, current->mm,
@@ -1541,7 +1553,11 @@ no_page:
 			unlock_page(page);
 	}
 
+#ifdef CONFIG_PROTECT_LRU
+	return protect_lru_move_and_shrink(page);
+#else
 	return page;
+#endif
 }
 EXPORT_SYMBOL(pagecache_get_page);
 
@@ -2380,6 +2396,33 @@ static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 	return 1;
 }
 
+#ifdef CONFIG_TRACING
+static void filemap_tracing_mark_begin(struct file *file,
+		pgoff_t offset, unsigned int size, bool sync)
+{
+	char buf[TRACING_MARK_BUF_SIZE], *path;
+
+	if (!tracing_is_on())
+		return;
+
+	path = file_path(file, buf, TRACING_MARK_BUF_SIZE);
+	if (IS_ERR(path)) {
+		sprintf(buf, "file_path failed(%ld)", PTR_ERR(path));
+		path = buf;
+	}
+
+	tracing_mark_begin("%d , %s , %lu , %d", sync, path, offset, size);
+}
+
+static void filemap_tracing_mark_end()
+{
+    tracing_mark_end();
+}
+#else
+static void filemap_tracing_mark_begin(struct file *file,
+		pgoff_t offset, unsigned int size, bool sync) { }
+static void filemap_tracing_mark_end() { }
+#endif
 
 /*
  * Synchronous readahead happens when we don't even find a page in the page
@@ -2395,17 +2438,23 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	struct address_space *mapping = file->f_mapping;
 	struct file *fpin = NULL;
 	pgoff_t offset = vmf->pgoff;
+	unsigned int ra_pages;
 
 	/* If we don't want any read-ahead, don't bother */
 	if (vmf->vma->vm_flags & VM_RAND_READ)
 		return fpin;
-	if (!ra->ra_pages)
+	if (!RA_PAGES(ra))
 		return fpin;
+
+	/* sync ra->ra_pages with bdi->ra_pages*/
+	ra_pages_sync(ra, mapping);
 
 	if (vmf->vma->vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+		filemap_tracing_mark_begin(file, offset, RA_PAGES(ra), 1);
 		page_cache_sync_readahead(mapping, ra, file, offset,
-					  ra->ra_pages);
+					  RA_PAGES(ra));
+		filemap_tracing_mark_end();
 		return fpin;
 	}
 
@@ -2424,10 +2473,17 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	 * mmap read-around
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	ra->start = max_t(long, 0, offset - ra->ra_pages / 2);
-	ra->size = ra->ra_pages;
-	ra->async_size = ra->ra_pages / 4;
+#if CONFIG_MMAP_READAROUND_LIMIT == 0
+	ra_pages = RA_PAGES(ra);
+#else
+	ra_pages = min_t(unsigned int, RA_PAGES(ra), CONFIG_MMAP_READAROUND_LIMIT);
+#endif
+	ra->start = max_t(long, 0, offset - ra_pages / 2);
+	ra->size = ra_pages;
+	ra->async_size = ra_pages / 4;
+	filemap_tracing_mark_begin(file, offset, ra_pages, 1);
 	ra_submit(ra, mapping, file);
+	filemap_tracing_mark_end();
 	return fpin;
 }
 
@@ -2445,6 +2501,9 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 	struct file *fpin = NULL;
 	pgoff_t offset = vmf->pgoff;
 
+	/* sync ra->ra_pages with bdi->ra_pages*/
+	ra_pages_sync(ra, mapping);
+
 	/* If we don't want any read-ahead, don't bother */
 	if (vmf->vma->vm_flags & VM_RAND_READ)
 		return fpin;
@@ -2452,8 +2511,10 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 		ra->mmap_miss--;
 	if (PageReadahead(page)) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+		filemap_tracing_mark_begin(file, offset, RA_PAGES(ra), 0);
 		page_cache_async_readahead(mapping, ra, file,
-					   page, offset, ra->ra_pages);
+					   page, offset, RA_PAGES(ra));
+		filemap_tracing_mark_end();
 	}
 	return fpin;
 }
@@ -2576,7 +2637,9 @@ page_not_uptodate:
 	 */
 	ClearPageError(page);
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+	filemap_tracing_mark_begin(file, offset, 1, 1);
 	error = mapping->a_ops->readpage(file, page);
+	filemap_tracing_mark_end();
 	if (!error) {
 		wait_on_page_locked(page);
 		if (!PageUptodate(page))

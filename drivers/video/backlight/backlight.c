@@ -24,6 +24,7 @@
 static struct list_head backlight_dev_list;
 static struct mutex backlight_dev_list_mutex;
 static struct blocking_notifier_head backlight_notifier;
+static struct blocking_notifier_head bl_level_notifier;
 
 static const char *const backlight_types[] = {
 	[BACKLIGHT_RAW] = "raw",
@@ -178,16 +179,19 @@ int backlight_device_set_brightness(struct backlight_device *bd,
 	mutex_lock(&bd->ops_lock);
 	if (bd->ops) {
 		if (brightness > bd->props.max_brightness)
-			rc = -EINVAL;
-		else {
-			pr_debug("set brightness to %lu\n", brightness);
-			bd->props.brightness = brightness;
-			rc = backlight_update_status(bd);
-		}
+			brightness = bd->props.max_brightness;
+		else if (brightness < 0)
+			brightness = 0;
+
+		pr_debug("set brightness to %lu\n", brightness);
+		bd->props.brightness = brightness;
+		rc = backlight_update_status(bd);
 	}
 	mutex_unlock(&bd->ops_lock);
 
 	backlight_generate_event(bd, BACKLIGHT_UPDATE_SYSFS);
+	blocking_notifier_call_chain(&bl_level_notifier,
+				     brightness, bd);
 
 	return rc;
 }
@@ -219,6 +223,31 @@ static ssize_t type_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(type);
 
+static ssize_t max_brightness_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int rc;
+	unsigned long maxbrightness;
+	struct backlight_device *bd = to_backlight_device(dev);
+
+	rc = kstrtoul(buf, 0, &maxbrightness);
+	if (rc)
+		return rc;
+
+	mutex_lock(&bd->ops_lock);
+	if (bd->ops) {
+		pr_debug("set max_brightness to %lu\n", maxbrightness);
+		bd->props.max_brightness = maxbrightness;
+		if (bd->props.brightness > maxbrightness) {
+			bd->props.brightness = maxbrightness;
+			backlight_update_status(bd);
+		}
+	}
+	mutex_unlock(&bd->ops_lock);
+
+	return count;
+}
+
 static ssize_t max_brightness_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -226,7 +255,7 @@ static ssize_t max_brightness_show(struct device *dev,
 
 	return sprintf(buf, "%d\n", bd->props.max_brightness);
 }
-static DEVICE_ATTR_RO(max_brightness);
+static DEVICE_ATTR_RW(max_brightness);
 
 static ssize_t actual_brightness_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -412,6 +441,27 @@ struct backlight_device *backlight_device_get_by_type(enum backlight_type type)
 }
 EXPORT_SYMBOL(backlight_device_get_by_type);
 
+int get_backlight_brightness(void)
+{
+	int bl = 0;
+	struct backlight_device *bd;
+
+	bd = backlight_device_get_by_type(BACKLIGHT_RAW);
+
+	if (IS_ERR_OR_NULL(bd)) {
+		return bl;
+	}
+
+	mutex_lock(&bd->ops_lock);
+	if (bd->ops && bd->ops->get_brightness)
+		bl = bd->ops->get_brightness(bd);
+	else
+		bl = bd->props.brightness;
+	mutex_unlock(&bd->ops_lock);
+
+	return bl;
+}
+EXPORT_SYMBOL(get_backlight_brightness);
 /**
  * backlight_device_unregister - unregisters a backlight device object.
  * @bd: the backlight device object to be unregistered and freed.
@@ -490,6 +540,34 @@ int backlight_unregister_notifier(struct notifier_block *nb)
 	return blocking_notifier_chain_unregister(&backlight_notifier, nb);
 }
 EXPORT_SYMBOL(backlight_unregister_notifier);
+
+/**
+ * backlight_level_notifier_register - get notified of backlight level changed
+ * @nb: notifier block with the notifier to call on backlight level changed
+ *
+ * @return 0 on success, otherwise a negative error code
+ *
+ * Register a notifier to get notified when backlight level has changed
+ */
+int backlight_level_notifier_register(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&bl_level_notifier, nb);
+}
+EXPORT_SYMBOL(backlight_level_notifier_register);
+
+/**
+ * backlight_level_notifier_unregister - unregister a backlight level notifier
+ * @nb: notifier block to unregister
+ *
+ * @return 0 on success, otherwise a negative error code
+ *
+ * Unregister a notifier to get notified when backlight level has changed
+ */
+int backlight_level_notifier_unregister(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&bl_level_notifier, nb);
+}
+EXPORT_SYMBOL(backlight_level_notifier_unregister);
 
 /**
  * devm_backlight_device_register - resource managed backlight_device_register()

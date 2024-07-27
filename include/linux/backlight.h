@@ -146,6 +146,11 @@ extern int backlight_register_notifier(struct notifier_block *nb);
 extern int backlight_unregister_notifier(struct notifier_block *nb);
 extern struct backlight_device *backlight_device_get_by_type(enum backlight_type type);
 extern int backlight_device_set_brightness(struct backlight_device *bd, unsigned long brightness);
+/*For light sensor calibrate. start.*/
+extern int get_backlight_brightness(void);
+extern int backlight_level_notifier_register(struct notifier_block *nb);
+extern int backlight_level_notifier_unregister(struct notifier_block *nb);
+/*For light sensor calibrate. end.*/
 
 #define to_backlight_device(obj) container_of(obj, struct backlight_device, dev)
 

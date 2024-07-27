@@ -19,6 +19,9 @@
 #include <linux/page-flags-layout.h>
 #include <linux/atomic.h>
 #include <asm/page.h>
+#ifdef CONFIG_PROTECT_LRU
+#include <linux/mm_types.h>
+#endif
 
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
@@ -151,6 +154,7 @@ enum zone_stat_item {
 	NR_ZSPAGES,		/* allocated in zsmalloc */
 #endif
 	NR_FREE_CMA_PAGES,
+	NR_FREE_HIGHATOMIC_PAGES,
 	NR_VM_ZONE_STAT_ITEMS };
 
 enum node_stat_item {
@@ -160,6 +164,13 @@ enum node_stat_item {
 	NR_INACTIVE_FILE,	/*  "     "     "   "       "         */
 	NR_ACTIVE_FILE,		/*  "     "     "   "       "         */
 	NR_UNEVICTABLE,		/*  "     "     "   "       "         */
+#ifdef CONFIG_PROTECT_LRU
+	NR_PROTECT_LRU_BASE,
+	NR_PROTECT_INACTIVE_ANON = NR_PROTECT_LRU_BASE,
+	NR_PROTECT_ACTIVE_ANON,
+	NR_PROTECT_INACTIVE_FILE,
+	NR_PROTECT_ACTIVE_FILE,
+#endif
 	NR_SLAB_RECLAIMABLE,
 	NR_SLAB_UNRECLAIMABLE,
 	NR_ISOLATED_ANON,	/* Temporary isolated pages from anon lru */
@@ -237,6 +248,18 @@ struct zone_reclaim_stat {
 	unsigned long		recent_scanned[2];
 };
 
+#ifdef CONFIG_PROTECT_LRU
+/* 4 comes from PROTECT_LRU_WIDTH, 3 protect heads and 1 normal head */
+#define PROTECT_HEAD_MAX	4
+#define PROTECT_HEAD_END	(PROTECT_HEAD_MAX - 1)
+
+struct protect_head {
+	struct page protect_page[NR_LRU_LISTS - 1];
+	unsigned long max_pages;
+	unsigned long cur_pages;
+};
+#endif
+
 struct lruvec {
 	struct list_head		lists[NR_LRU_LISTS];
 	struct zone_reclaim_stat	reclaim_stat;
@@ -244,6 +267,10 @@ struct lruvec {
 	atomic_long_t			inactive_age;
 	/* Refaults at the time of last reclaim cycle */
 	unsigned long			refaults;
+#ifdef CONFIG_PROTECT_LRU
+	struct protect_head heads[PROTECT_HEAD_MAX];
+	bool protect;
+#endif
 #ifdef CONFIG_MEMCG
 	struct pglist_data *pgdat;
 #endif
@@ -802,7 +829,11 @@ enum memmap_context {
 extern void init_currently_empty_zone(struct zone *zone, unsigned long start_pfn,
 				     unsigned long size);
 
+#ifdef CONFIG_PROTECT_LRU
+extern void lruvec_init(struct mem_cgroup *memcg, struct lruvec *lruvec);
+#else
 extern void lruvec_init(struct lruvec *lruvec);
+#endif
 
 static inline struct pglist_data *lruvec_pgdat(struct lruvec *lruvec)
 {

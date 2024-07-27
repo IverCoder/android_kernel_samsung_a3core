@@ -25,6 +25,14 @@ static inline void cleanup_oss_soundcore(void)	{ }
 struct class *sound_class;
 EXPORT_SYMBOL(sound_class);
 
+//added begin for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
+struct class *audio_class;
+EXPORT_SYMBOL(audio_class);
+
+extern ssize_t headset_state_A03core_show(struct device *kobj, struct device_attribute *attr, char *buff);
+extern ssize_t headset_state_A03core_store(struct device *kobj, struct device_attribute *attr, const char *buff, size_t len);
+//added end for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
+
 MODULE_DESCRIPTION("Core sound module");
 MODULE_AUTHOR("Alan Cox");
 MODULE_LICENSE("GPL");
@@ -36,9 +44,16 @@ static char *sound_devnode(struct device *dev, umode_t *mode)
 	return kasprintf(GFP_KERNEL, "snd/%s", dev_name(dev));
 }
 
+//added begin for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
+static struct device_attribute classic_earjack_state_attrs[] = {
+	__ATTR(state, 0644, headset_state_A03core_show, headset_state_A03core_store),
+};
+//added end for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
+
 static int __init init_soundcore(void)
 {
 	int rc;
+	struct device *earjack = NULL;	//added for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
 
 	rc = init_oss_soundcore();
 	if (rc)
@@ -49,6 +64,16 @@ static int __init init_soundcore(void)
 		cleanup_oss_soundcore();
 		return PTR_ERR(sound_class);
 	}
+
+//added begin for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
+	audio_class = class_create(THIS_MODULE, "audio");
+	if (IS_ERR(audio_class)) {
+		return PTR_ERR(sound_class);
+	}
+
+	earjack = device_create(audio_class, NULL, MKDEV(0, 0), NULL, "%s", "earjack");
+	device_create_file(earjack, &classic_earjack_state_attrs[0]);
+//added end for KSG_M168_A01-2985 adding node /sys/class/audio/earjack/state 20210930
 
 	sound_class->devnode = sound_devnode;
 

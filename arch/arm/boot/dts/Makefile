@@ -1069,6 +1069,75 @@ dtb-$(CONFIG_ARCH_ZX) += zx296702-ad1.dtb
 dtb-$(CONFIG_ARCH_ASPEED) += aspeed-bmc-opp-palmetto.dtb \
 	aspeed-bmc-opp-romulus.dtb \
 	aspeed-ast2500-evb.dtb
+
+ifeq ($(BSP_BUILD_DT_OVERLAY),y)
+
+ifeq ($(BSP_BUILD_ANDROID_OS),y)
+
+ifeq ($(BSP_BUILD_FAMILY),sharkl3)
+dtbo-$(CONFIG_ARCH_SPRD) += \
+	sp9863a-1h10_go_32b-overlay.dtbo \
+	sp9863a-1h10_22nm_go_32b-overlay.dtbo \
+	sp9863a-1h10_go_32b_novab-overlay.dtbo \
+	sp9863a-1h10_NoModem-overlay.dtbo
+
+sp9863a-1h10_NoModem-overlay.dtbo-base :=sp9863a.dtb
+sp9863a-1h10_go_32b-overlay.dtbo-base := sp9863a.dtb
+sp9863a-1h10_22nm_go_32b-overlay.dtbo-base := sp9863a.dtb
+sp9863a-1h10_go_32b_novab-overlay.dtbo-base := sp9863a.dtb
+endif
+
+ifeq ($(BSP_BUILD_FAMILY),pike2)
+dtbo-$(CONFIG_ARCH_SPRD) += sp7731e-1h10-overlay.dtbo
+
+sp7731e-1h10-overlay.dtbo-base := sp7731e.dtb
+endif
+
+ifeq ($(BSP_BUILD_FAMILY),sharkle)
+dtbo-$(CONFIG_ARCH_SPRD) += sp9832e-1h10_go-overlay.dtbo
+
+sp9832e-1h10_go-overlay.dtbo-base := sp9832e.dtb
+endif
+
+ifeq ($(BSP_BUILD_FAMILY),sharkl5)
+dtbo-$(CONFIG_ARCH_SPRD) += \
+	ums312-1h10-go-overlay.dtbo \
+	ums312-2h10-go-overlay.dtbo
+
+ums312-1h10-go-overlay.dtbo-base := ums312.dtb
+ums312-2h10-go-overlay.dtbo-base := ums312.dtb
+endif
+
+ifeq ($(BSP_BUILD_FAMILY),qogirl6)
+dtbo-$(CONFIG_ARCH_SPRD) += ums9230-1h10-go2g-overlay.dtbo
+
+ums9230-1h10-go2g-overlay.dtbo-base := ums9230.dtb
+endif
+
+endif #//BSP_BUILD_ANDROID_OS
+
+else #//AiAiAi or No DTBO
+dtb-$(CONFIG_ARCH_SPRD) += \
+	sp9863a.dtb \
+	sp7731e.dtb \
+	sp9832e.dtb \
+	sp9832e-w10v1.dtb \
+	ums312.dtb \
+	ums9230.dtb
+
+dtbo-$(CONFIG_ARCH_SPRD) += \
+	sp9863a-1h10_go_32b-overlay.dtbo \
+	sp9863a-1h10_22nm_go_32b-overlay.dtbo \
+	sp9863a-1h10_go_32b_novab-overlay.dtbo \
+	sp9863a-1h10_NoModem-overlay.dtbo \
+	sp7731e-1h10-overlay.dtbo \
+	sp9832e-1h10_go-overlay.dtbo \
+	ums312-1h10-go-overlay.dtbo \
+	ums9230-1h10-go2g-overlay.dtbo \
+	ums312-2h10-go-overlay.dtbo
+
+endif #//BSP_BUILD_DT_OVERLAY
+
 endif
 
 dtstree		:= $(srctree)/$(src)
@@ -1076,13 +1145,13 @@ dtb-$(CONFIG_OF_ALL_DTBS) := $(patsubst $(dtstree)/%.dts,%.dtb, $(wildcard $(dts
 
 DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
 ifneq ($(DTB_NAMES),)
-DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
+DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES)) $(dtbo-y)
 else
-DTB_LIST := $(dtb-y)
+DTB_LIST := $(dtb-y) $(dtbo-y)
 endif
 
 targets += dtbs dtbs_install
 targets += $(DTB_LIST)
 
 always		:= $(DTB_LIST)
-clean-files	:= *.dtb
+clean-files	:= *.dtb *.dtbo

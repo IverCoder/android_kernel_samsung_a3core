@@ -11,7 +11,18 @@
 #define LINUX_MMC_CARD_H
 
 #include <linux/device.h>
+#include <linux/mmc/core.h>
 #include <linux/mod_devicetable.h>
+
+#define MAX_CNT_U64		0xFFFFFFFFFF
+#define MAX_CNT_U32		0x7FFFFFFF
+#define STATUS_MASK		(R1_ERROR | R1_CC_ERROR | R1_CARD_ECC_FAILED | \
+							R1_WP_VIOLATION | R1_OUT_OF_RANGE)
+#define HALT_UNHALT_ERR		0x00000001
+#define CQ_EN_DIS_ERR		0x00000002
+#define RPMB_SWITCH_ERR		0x00000004
+#define HW_RST			0x00000008
+#define CQERR_MASK		(HALT_UNHALT_ERR | CQ_EN_DIS_ERR | RPMB_SWITCH_ERR | HW_RST)
 
 struct mmc_cid {
 	unsigned int		manfid;
@@ -23,6 +34,7 @@ struct mmc_cid {
 	unsigned char		hwrev;
 	unsigned char		fwrev;
 	unsigned char		month;
+	unsigned int		tmp_name;/*For unid node*/
 };
 
 struct mmc_csd {
@@ -237,6 +249,25 @@ struct mmc_part {
 #define MMC_BLK_DATA_AREA_RPMB	(1<<3)
 };
 
+struct mmc_card_error_log {
+	char    type[5];        // sbc, cmd, data, stop, busy
+	int     err_type;
+	u32     status;
+	u64     first_issue_time;
+	u64     last_issue_time;
+	u32     count;
+	u32     ge_cnt;         // status[19] : general error or unknown error
+	u32     cc_cnt;         // status[20] : internal card controller error
+	u32     ecc_cnt;        // status[21] : ecc error
+	u32     wp_cnt;         // status[26] : write protection error
+	u32     oor_cnt;        // status[31] : out of range error
+	u32     halt_cnt;       // cq halt / unhalt fail
+	u32     cq_cnt;         // cq enable / disable fail
+	u32     rpmb_cnt;       // RPMB switch fail
+	u32     noti_cnt;       // uevent notification count
+	u32	hw_rst_cnt;     // reset count
+};
+
 /*
  * MMC device
  */
@@ -266,6 +297,9 @@ struct mmc_card {
 #define MMC_QUIRK_LONG_READ_TIME (1<<9)		/* Data read time > CSD says */
 #define MMC_QUIRK_SEC_ERASE_TRIM_BROKEN (1<<10)	/* Skip secure for erase/trim */
 #define MMC_QUIRK_BROKEN_IRQ_POLLING	(1<<11)	/* Polling SDIO_CCCR_INTx could create a fake interrupt */
+#ifdef CONFIG_MMC_FFU_FUNCTION
+#define MMC_QUIRK_FFUED		(1<<22)		/* card has been FFUed */
+#endif
 #define MMC_QUIRK_TRIM_BROKEN	(1<<12)		/* Skip trim */
 #define MMC_QUIRK_BROKEN_HPI	(1<<13)		/* Disable broken HPI support */
 
@@ -306,6 +340,9 @@ struct mmc_card {
 	unsigned int    nr_parts;
 
 	unsigned int		bouncesz;	/* Bounce buffer size */
+
+	struct device_attribute error_count;
+	struct mmc_card_error_log err_log[10];
 };
 
 static inline bool mmc_large_sector(struct mmc_card *card)
@@ -318,5 +355,7 @@ bool mmc_card_is_blockaddr(struct mmc_card *card);
 #define mmc_card_mmc(c)		((c)->type == MMC_TYPE_MMC)
 #define mmc_card_sd(c)		((c)->type == MMC_TYPE_SD)
 #define mmc_card_sdio(c)	((c)->type == MMC_TYPE_SDIO)
+
+#define mmc_get_drvdata(c)      dev_get_drvdata(&(c)->dev)
 
 #endif /* LINUX_MMC_CARD_H */

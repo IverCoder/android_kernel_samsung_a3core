@@ -90,10 +90,13 @@ obj-$(CONFIG_MMC_SDHCI_MSM)		+= sdhci-msm.o
 obj-$(CONFIG_MMC_SDHCI_ST)		+= sdhci-st.o
 obj-$(CONFIG_MMC_SDHCI_MICROCHIP_PIC32)	+= sdhci-pic32.o
 obj-$(CONFIG_MMC_SDHCI_BRCMSTB)		+= sdhci-brcmstb.o
-
+obj-$(CONFIG_MMC_SPRD_SDHCR11)		+= sprd-sdhcr11.o
+obj-$(CONFIG_MMC_SPRD_SDHCR10)		+= sprd-sdhcr10.o
+obj-$(CONFIG_MMC_SPRD_BOOTDEVICE)	+= sprd-proc-bootdevice.o
 ifeq ($(CONFIG_CB710_DEBUG),y)
 	CFLAGS-cb710-mmc	+= -DDEBUG
 endif
 
 obj-$(CONFIG_MMC_SDHCI_XENON)	+= sdhci-xenon-driver.o
 sdhci-xenon-driver-y		+= sdhci-xenon.o sdhci-xenon-phy.o
+GCOV_PROFILE_sprd-sdhcr11.o := ${CONFIG_SPRD_MMC_GCOV}

@@ -377,11 +377,11 @@ struct subprocess_info *call_usermodehelper_setup(const char *path, char **argv,
 
 	INIT_WORK(&sub_info->work, call_usermodehelper_exec_work);
 
-#ifdef CONFIG_STATIC_USERMODEHELPER
-	sub_info->path = CONFIG_STATIC_USERMODEHELPER_PATH;
-#else
+//#ifdef CONFIG_STATIC_USERMODEHELPER
+	//sub_info->path = CONFIG_STATIC_USERMODEHELPER_PATH;
+//#else
 	sub_info->path = path;
-#endif
+//#endif
 	sub_info->argv = argv;
 	sub_info->envp = envp;
 

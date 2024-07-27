@@ -244,6 +244,9 @@ enum req_flag_bits {
 	__REQ_NOUNMAP,		/* do not free blocks when zeroing */
 
 	__REQ_NOWAIT,           /* Don't wait if request will block */
+
+	__REQ_BYPASS,		/* Bypass dm-default-key */
+
 	__REQ_NR_BITS,		/* stops here */
 };
 
@@ -263,6 +266,8 @@ enum req_flag_bits {
 
 #define REQ_NOUNMAP		(1ULL << __REQ_NOUNMAP)
 #define REQ_NOWAIT		(1ULL << __REQ_NOWAIT)
+
+#define REQ_BYPASS		(1ULL << __REQ_BYPASS)
 
 #define REQ_FAILFAST_MASK \
 	(REQ_FAILFAST_DEV | REQ_FAILFAST_TRANSPORT | REQ_FAILFAST_DRIVER)

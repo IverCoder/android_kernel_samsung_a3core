@@ -506,6 +506,11 @@ config PCI_ENDPOINT_TEST
            Enable this configuration option to enable the host side test driver
            for PCI Endpoint.
 
+config SPRD_UID
+	tristate "Spreadtrum Uid Support"
+        help
+          provoid a driver to get chip uid.
+
 config UID_SYS_STATS
 	bool "Per-UID statistics"
 	depends on PROFILING && TASK_XACCT && TASK_IO_ACCOUNTING
@@ -527,6 +532,11 @@ config MEMORY_STATE_TIME
 	help
 	  Memory time statistics exported to /sys/kernel/memory_state_time
 
+config SPRD_SOCID
+	tristate "Spreadtrum soc id Support"
+	help
+	  provoid a driver to get soc id.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -539,4 +549,12 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/sprd_vsp/Kconfig"
+source "drivers/misc/sprd_vpu/Kconfig"
+source "drivers/misc/sprd_jpg/Kconfig"
+source "drivers/misc/sprdwcn/Kconfig"
+source "drivers/misc/sprd_wcn_n6pro/Kconfig"
+source "drivers/misc/sprd_audio/Kconfig"
+source "drivers/misc/sprd_apdu/Kconfig"
+source "drivers/misc/vibrator/Kconfig"
 endmenu

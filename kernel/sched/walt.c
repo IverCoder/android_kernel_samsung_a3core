@@ -24,6 +24,7 @@
 #include <trace/events/sched.h>
 #include "sched.h"
 #include "walt.h"
+#include "tune.h"
 
 #define WINDOW_STATS_RECENT		0
 #define WINDOW_STATS_MAX		1
@@ -33,12 +34,12 @@
 
 #define EXITING_TASK_MARKER	0xdeaddead
 
-static __read_mostly unsigned int walt_ravg_hist_size = 5;
+static __read_mostly unsigned int walt_ravg_hist_size = 6;
 static __read_mostly unsigned int walt_window_stats_policy =
-	WINDOW_STATS_MAX_RECENT_AVG;
-static __read_mostly unsigned int walt_account_wait_time = 1;
+	WINDOW_STATS_MAX;
+static __read_mostly unsigned int walt_account_wait_time;
 static __read_mostly unsigned int walt_freq_account_wait_time = 0;
-static __read_mostly unsigned int walt_io_is_busy = 0;
+__read_mostly unsigned int walt_io_is_busy;
 
 unsigned int sysctl_sched_walt_init_task_load_pct = 15;
 
@@ -50,9 +51,12 @@ bool __read_mostly walt_disabled = false;
  * rollover occurs just before the tick boundary.
  */
 __read_mostly unsigned int walt_ravg_window =
-					    (20000000 / TICK_NSEC) * TICK_NSEC;
+					    (16000000 / TICK_NSEC) * TICK_NSEC;
 #define MIN_SCHED_RAVG_WINDOW ((10000000 / TICK_NSEC) * TICK_NSEC)
 #define MAX_SCHED_RAVG_WINDOW ((1000000000 / TICK_NSEC) * TICK_NSEC)
+
+unsigned int walt_busy_threshold = 50;
+unsigned int sysctl_sched_walt_cross_window_util = 1;
 
 static unsigned int sync_cpu;
 static ktime_t ktime_last;
@@ -202,11 +206,12 @@ static int __init set_walt_ravg_window(char *str)
 
 early_param("walt_ravg_window", set_walt_ravg_window);
 
-static void
+static u64
 update_window_start(struct rq *rq, u64 wallclock)
 {
 	s64 delta;
 	int nr_windows;
+	u64 old_window_start = rq->window_start;
 
 	delta = wallclock - rq->window_start;
 	/* If the MPM global timer is cleared, set delta as 0 to avoid kernel BUG happening */
@@ -216,12 +221,14 @@ update_window_start(struct rq *rq, u64 wallclock)
 	}
 
 	if (delta < walt_ravg_window)
-		return;
+		return old_window_start;
 
 	nr_windows = div64_u64(delta, walt_ravg_window);
 	rq->window_start += (u64)nr_windows * (u64)walt_ravg_window;
 
 	rq->cum_window_demand = rq->cumulative_runnable_avg;
+
+	return old_window_start;
 }
 
 extern unsigned long capacity_curr_of(int cpu);
@@ -232,7 +239,7 @@ extern unsigned long capacity_curr_of(int cpu);
  */
 static u64 scale_exec_time(u64 delta, struct rq *rq)
 {
-	unsigned long capcurr = capacity_curr_of(cpu_of(rq));
+	u64 capcurr = capacity_curr_of(cpu_of(rq));
 
 	return (delta * capcurr) >> SCHED_CAPACITY_SHIFT;
 }
@@ -249,8 +256,8 @@ void walt_account_irqtime(int cpu, struct task_struct *curr,
 				 u64 delta, u64 wallclock)
 {
 	struct rq *rq = cpu_rq(cpu);
-	unsigned long flags, nr_windows;
-	u64 cur_jiffies_ts;
+	unsigned long flags;
+	u64 cur_jiffies_ts, nr_windows;
 
 	raw_spin_lock_irqsave(&rq->lock, flags);
 
@@ -542,16 +549,20 @@ static void update_cpu_busy_time(struct task_struct *p, struct rq *rq,
 
 static int account_busy_for_task_demand(struct task_struct *p, int event)
 {
+	bool account_wait_time = walt_account_wait_time > 0;
+
 	/* No need to bother updating task demand for exiting tasks
 	 * or the idle task. */
 	if (exiting_task(p) || is_idle_task(p))
 		return 0;
 
+	account_wait_time = schedtune_account_wait_time(p) > 0;
+
 	/* When a task is waking up it is completing a segment of non-busy
 	 * time. Likewise, if wait time is not treated as busy time, then
 	 * when a task begins to run or is migrated, it is not running and
 	 * is completing a segment of non-busy time. */
-	if (event == TASK_WAKE || (!walt_account_wait_time &&
+	if (event == TASK_WAKE || (!account_wait_time &&
 			 (event == PICK_NEXT_TASK || event == TASK_MIGRATE)))
 		return 0;
 
@@ -593,7 +604,8 @@ static void update_history(struct rq *rq, struct task_struct *p,
 			max = hist[widx];
 	}
 
-	p->ravg.sum = 0;
+	if (!sysctl_sched_walt_cross_window_util)
+		p->ravg.sum = 0;
 
 	if (walt_window_stats_policy == WINDOW_STATS_RECENT) {
 		demand = runtime;
@@ -641,6 +653,12 @@ static void add_to_task_demand(struct rq *rq, struct task_struct *p,
 	p->ravg.sum += delta;
 	if (unlikely(p->ravg.sum > walt_ravg_window))
 		p->ravg.sum = walt_ravg_window;
+
+	if (sysctl_sched_walt_cross_window_util) {
+		p->ravg.sum_latest += delta;
+		if (unlikely(p->ravg.sum_latest > walt_ravg_window))
+			p->ravg.sum_latest = walt_ravg_window;
+	}
 }
 
 /*
@@ -700,10 +718,11 @@ static void update_task_demand(struct task_struct *p, struct rq *rq,
 	u64 delta, window_start = rq->window_start;
 	int new_window, nr_full_windows;
 	u32 window_size = walt_ravg_window;
+	u32 window_scale = scale_exec_time(window_size, rq);
 
 	new_window = mark_start < window_start;
 	if (!account_busy_for_task_demand(p, event)) {
-		if (new_window)
+		if (new_window) {
 			/* If the time accounted isn't being accounted as
 			 * busy time, and a new window started, only the
 			 * previous window need be closed out with the
@@ -711,6 +730,11 @@ static void update_task_demand(struct task_struct *p, struct rq *rq,
 			 * elapsed, but since empty windows are dropped,
 			 * it is not necessary to account those. */
 			update_history(rq, p, p->ravg.sum, 1, event);
+			if (sysctl_sched_walt_cross_window_util)
+				p->ravg.sum = 0;
+		}
+		if (sysctl_sched_walt_cross_window_util)
+			p->ravg.sum_latest = 0;
 		return;
 	}
 
@@ -718,7 +742,8 @@ static void update_task_demand(struct task_struct *p, struct rq *rq,
 		/* The simple case - busy time contained within the existing
 		 * window. */
 		add_to_task_demand(rq, p, wallclock - mark_start);
-		return;
+
+		goto done;
 	}
 
 	/* Busy time spans at least two windows. Temporarily rewind
@@ -732,10 +757,16 @@ static void update_task_demand(struct task_struct *p, struct rq *rq,
 
 	/* Push new sample(s) into task's demand history */
 	update_history(rq, p, p->ravg.sum, 1, event);
-	if (nr_full_windows)
-		update_history(rq, p, scale_exec_time(window_size, rq),
+	if (sysctl_sched_walt_cross_window_util)
+		p->ravg.sum = p->ravg.sum_latest;
+	if (nr_full_windows) {
+		update_history(rq, p, window_scale,
 			       nr_full_windows, event);
-
+		if (sysctl_sched_walt_cross_window_util) {
+			p->ravg.sum = window_scale;
+			p->ravg.sum_latest = window_scale;
+		}
+	}
 	/* Roll window_start back to current to process any remainder
 	 * in current window. */
 	window_start += (u64)nr_full_windows * (u64)window_size;
@@ -743,27 +774,38 @@ static void update_task_demand(struct task_struct *p, struct rq *rq,
 	/* Process (wallclock - window_start) next */
 	mark_start = window_start;
 	add_to_task_demand(rq, p, wallclock - mark_start);
+
+done:
+	/* Update task demand in current window when policy is
+	 * WINDOW_STATS_MAX. The purpose is to create opportunity
+	 * for rising cpu freq when cr_avg is used for cpufreq
+	 */
+	if (p->ravg.sum > p->ravg.demand &&
+		walt_window_stats_policy == WINDOW_STATS_MAX) {
+			if (!task_has_dl_policy(p) || !p->dl.dl_throttled) {
+				if (task_on_rq_queued(p))
+					p->sched_class->fixup_cumulative_runnable_avg(
+						rq, p, p->ravg.sum);
+				else if (rq->curr == p)
+					fixup_cum_window_demand(
+						rq, p->ravg.sum);
+			}
+			p->ravg.demand = p->ravg.sum;
+	}
 }
 
 /* Reflect task activity on its demand and cpu's busy time statistics */
 void walt_update_task_ravg(struct task_struct *p, struct rq *rq,
 	     int event, u64 wallclock, u64 irqtime)
 {
+	u64 old_window_start;
+
 	if (walt_disabled || !rq->window_start)
 		return;
 
-	/* there's a bug here - there are many cases where
-	 * we enter here without holding this lock, coming from
-	 * walt_fixup_busy_time - looks like in 4.14 we don't
-	 * hold the dest_rq at time of migration, but I haven't
-	 * yet worked out if it is safe to always lock dest_rq there.
-	 *
-	 * temporarily disable this assert to continue checking the
-	 * rest of the locking here.
-	 */
-	//lockdep_assert_held(&rq->lock);
+	lockdep_assert_held(&rq->lock);
 
-	update_window_start(rq, wallclock);
+	old_window_start = update_window_start(rq, wallclock);
 
 	if (!p->ravg.mark_start)
 		goto done;
@@ -772,6 +814,21 @@ void walt_update_task_ravg(struct task_struct *p, struct rq *rq,
 	update_cpu_busy_time(p, rq, event, wallclock, irqtime);
 
 done:
+	if (rq->window_start > old_window_start) {
+		unsigned long cap_orig = capacity_orig_of(cpu_of(rq));
+		u64 busy_limit = (walt_ravg_window * walt_busy_threshold) / 100;
+
+		busy_limit = (busy_limit * cap_orig) >> SCHED_CAPACITY_SHIFT;
+		if (rq->prev_runnable_sum >= busy_limit) {
+			if (rq->is_busy == CPU_BUSY_CLR)
+				rq->is_busy = CPU_BUSY_PREPARE;
+			else if (rq->is_busy == CPU_BUSY_PREPARE)
+				rq->is_busy = CPU_BUSY_SET;
+		} else if (rq->is_busy != CPU_BUSY_CLR) {
+			rq->is_busy = CPU_BUSY_CLR;
+		}
+	}
+
 	trace_walt_update_task_ravg(p, rq, event, wallclock, irqtime);
 
 	p->ravg.mark_start = wallclock;
@@ -847,22 +904,11 @@ void walt_fixup_busy_time(struct task_struct *p, int new_cpu)
 
 	wallclock = walt_ktime_clock();
 
-//#define LOCK_CONDITION(rq) (debug_locks && !lockdep_is_held(&rq->lock))
-//	WARN(LOCK_CONDITION(task_rq(p)), "task_rq(p) not held. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
-//	WARN(LOCK_CONDITION(dest_rq), "dest_rq not held. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
-
-	/*
-	 * It seems that in lots of cases we don't have
-	 * dest_rq locked when we get here, which means
-	 * we can't be sure to the WALT stats - someone
-	 * needs to fix this.
-	 */
 	walt_update_task_ravg(task_rq(p)->curr, task_rq(p),
 			TASK_UPDATE, wallclock, 0);
 	walt_update_task_ravg(dest_rq->curr, dest_rq,
 			TASK_UPDATE, wallclock, 0);
 
-//	WARN(LOCK_CONDITION(task_rq(p)), "task_rq(p) not held after rq update. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
 	walt_update_task_ravg(p, task_rq(p), TASK_MIGRATE, wallclock, 0);
 
 	/*
@@ -909,6 +955,11 @@ void walt_init_new_task_load(struct task_struct *p)
 			div64_u64((u64)sysctl_sched_walt_init_task_load_pct *
                           (u64)walt_ravg_window, 100);
 	u32 init_load_pct = current->init_load_pct;
+	int stune_init_load_pct = schedtune_init_task_load_pct(p);
+
+	if (stune_init_load_pct > 0)
+		init_load_windows = div64_u64((u64)stune_init_load_pct *
+					      (u64)walt_ravg_window, 100);
 
 	p->init_load_pct = 0;
 	memset(&p->ravg, 0, sizeof(struct ravg));

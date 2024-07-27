@@ -28,6 +28,11 @@
 #include "quirks.h"
 #include "sd_ops.h"
 #include "pwrseq.h"
+#include <linux/mmc/sprd-proc-bootdevice.h>
+
+#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
+#include <linux/kthread.h>
+#endif
 
 #define DEFAULT_CMD6_TIMEOUT_MS	500
 #define MIN_CACHE_EN_TIMEOUT_MS 1600
@@ -92,6 +97,7 @@ static int mmc_decode_cid(struct mmc_card *card)
 		card->cid.serial	= UNSTUFF_BITS(resp, 16, 24);
 		card->cid.month		= UNSTUFF_BITS(resp, 12, 4);
 		card->cid.year		= UNSTUFF_BITS(resp, 8, 4) + 1997;
+		card->cid.tmp_name  = UNSTUFF_BITS(resp, 84, 20);
 		break;
 
 	case 2: /* MMC v2.0 - v2.2 */
@@ -109,6 +115,7 @@ static int mmc_decode_cid(struct mmc_card *card)
 		card->cid.serial	= UNSTUFF_BITS(resp, 16, 32);
 		card->cid.month		= UNSTUFF_BITS(resp, 12, 4);
 		card->cid.year		= UNSTUFF_BITS(resp, 8, 4) + 1997;
+		card->cid.tmp_name  = UNSTUFF_BITS(resp, 84, 20);
 		break;
 
 	default:
@@ -358,7 +365,35 @@ static void mmc_manage_gp_partitions(struct mmc_card *card, u8 *ext_csd)
 
 /* Minimum partition switch timeout in milliseconds */
 #define MMC_MIN_PART_SWITCH_TIME	300
-
+#ifdef CONFIG_MMC_SPRD_BOOTDEVICE
+static void sprd_bootdevice_csdinfo_get(struct mmc_card *card)
+{
+	set_bootdevice_fwrev(card->ext_csd.fwrev);
+	set_bootdevice_ife_time_est_typ(card->ext_csd.device_life_time_est_typ_a,
+					card->ext_csd.device_life_time_est_typ_b);
+	set_bootdevice_rev(card->ext_csd.rev);
+	set_bootdevice_pre_eol_info(card->ext_csd.pre_eol_info);
+	set_bootdevice_enhanced_area_offset(card->ext_csd.enhanced_area_offset);
+	set_bootdevice_enhanced_area_size(card->ext_csd.enhanced_area_size);
+	set_bootdevice_size(((u32)card->ext_csd.raw_sectors[3]<<24)+
+		((u32)card->ext_csd.raw_sectors[2]<<16) +
+		((u32)card->ext_csd.raw_sectors[1]<<8)+
+		((u32)card->ext_csd.raw_sectors[0]));
+	set_bootdevice_type();
+}
+static void sprd_bootdevice_cidinfo_get(struct mmc_card *card)
+{
+	set_bootdevice_csd(card->raw_csd);
+	set_bootdevice_product_name(card->cid.prod_name);
+	set_bootdevice_manfid(card->cid.manfid);
+	set_bootdevice_oemid(card->cid.oemid);
+	set_bootdevice_serial(card->cid.serial);
+	set_bootdevice_prv(card->cid.prv);
+	set_bootdevice_hwrev(card->cid.hwrev);
+	set_bootdevice_ocr(card->ocr);
+	set_bootdevice_erase_size(card->erase_size << 9);
+}
+#endif
 /*
  * Decode extended CSD.
  */
@@ -635,6 +670,7 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 			ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B];
 	}
 
+#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
 	/* eMMC v5.1 or later */
 	if (card->ext_csd.rev >= 8) {
 		card->ext_csd.cmdq_support = ext_csd[EXT_CSD_CMDQ_SUPPORT] &
@@ -644,7 +680,7 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		/* Exclude inefficiently small queue depths */
 		if (card->ext_csd.cmdq_depth <= 2) {
 			card->ext_csd.cmdq_support = false;
-			card->ext_csd.cmdq_depth = 0;
+			card->ext_csd.cmdq_depth = 2;
 		}
 		if (card->ext_csd.cmdq_support) {
 			pr_debug("%s: Command Queue supported depth %u\n",
@@ -652,6 +688,11 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 				 card->ext_csd.cmdq_depth);
 		}
 	}
+#endif
+
+#ifdef CONFIG_MMC_SPRD_BOOTDEVICE
+	sprd_bootdevice_csdinfo_get(card);
+#endif
 out:
 	return err;
 }
@@ -688,7 +729,9 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 
 		return err;
 	}
-
+#ifdef CONFIG_MMC_SPRD_BOOTDEVICE
+	set_bootdevice_ext_csd(ext_csd);
+#endif
 	err = mmc_decode_ext_csd(card, ext_csd);
 	kfree(ext_csd);
 	return err;
@@ -698,6 +741,15 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 {
 	u8 *bw_ext_csd;
 	int err;
+
+#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
+	/* add for emmc reset when error happen */
+	/* return directly because compare fail seldom happens when reinit
+	 * emmc
+	 */
+	if (emmc_resetting_when_cmdq)
+		return 0;
+#endif
 
 	if (bus_width == MMC_BUS_WIDTH_1)
 		return 0;
@@ -793,6 +845,9 @@ MMC_DEV_ATTR(raw_rpmb_size_mult, "%#x\n", card->ext_csd.raw_rpmb_size_mult);
 MMC_DEV_ATTR(rel_sectors, "%#x\n", card->ext_csd.rel_sectors);
 MMC_DEV_ATTR(ocr, "0x%08x\n", card->ocr);
 MMC_DEV_ATTR(cmdq_en, "%d\n", card->ext_csd.cmdq_en);
+MMC_DEV_ATTR(unid, "%c%02X%05X%02X%08X%01X%01X\n", 'L', card->cid.manfid, card->cid.tmp_name, 
+	 card->cid.prv,card->cid.serial, card->cid.month, (card->cid.year>2013? (card->cid.year-1997-16):(card->cid.year-1997)));
+
 
 static ssize_t mmc_fwrev_show(struct device *dev,
 			      struct device_attribute *attr,
@@ -850,6 +905,7 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_ocr.attr,
 	&dev_attr_dsr.attr,
 	&dev_attr_cmdq_en.attr,
+	&dev_attr_unid.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mmc_std);
@@ -1494,6 +1550,29 @@ bus_speed:
 	return 0;
 }
 
+#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
+static int mmc_select_cmdq(struct mmc_card *card)
+{
+	struct mmc_host *host = card->host;
+	int ret = 0;
+
+	ret = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+			EXT_CSD_CMDQ_MODE_EN, 1,
+			card->ext_csd.generic_cmd6_time);
+	if (ret)
+		goto out;
+
+	mmc_card_set_cmdq(card);
+	card->ext_csd.cmdq_en = true;
+
+out:
+	pr_notice("%s: CMDQ enable %s\n",
+		mmc_hostname(host), ret ? "fail":"done");
+
+	return ret;
+}
+#endif
+
 /*
  * Execute tuning sequence to seek the proper bus operating
  * conditions for HS200 and HS400, which sends CMD21 to the device.
@@ -1514,13 +1593,46 @@ static int mmc_hs200_tuning(struct mmc_card *card)
 	return mmc_execute_tuning(card);
 }
 
+/************Added for sdcard status node.*************/
+static struct kobject *sdcard_device = NULL;
+int sdcard_insert_or_not = 0;//plug in:1     plug out:0
+static ssize_t sdcard_status_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        return snprintf(buf, PAGE_SIZE, "%d\n", sdcard_insert_or_not);
+}
+
+static DEVICE_ATTR(sdcard_status, S_IRUGO , sdcard_status_show, NULL);
+
+static int create_sdcard_status_node(void)
+{
+        int error = 0;
+
+        if(sdcard_device != NULL){
+                pr_err(KERN_CRIT "sdcard device already created\n");
+        } else {
+                sdcard_device = kobject_create_and_add("sdcard_status", NULL);
+                if (sdcard_device == NULL) {
+                        printk(KERN_CRIT "%s: sdcard register failed\n", __func__);
+                        error = -ENOMEM;
+                        return error ;
+                }
+                error = sysfs_create_file(sdcard_device, &dev_attr_sdcard_status.attr);
+                if (error) {
+                        printk(KERN_CRIT "%s: sdcard_status_create_file failed\n", __func__);
+                        kobject_del(sdcard_device);
+                }
+        }
+        return 0 ;
+}
+/************Added for sdcard status node.*************/
+
 /*
  * Handle the detection and initialisation of a card.
  *
  * In the case of a resume, "oldcard" will contain the card
  * we're trying to reinitialise.
  */
-static int mmc_init_card(struct mmc_host *host, u32 ocr,
+int mmc_init_card(struct mmc_host *host, u32 ocr,
 	struct mmc_card *oldcard)
 {
 	struct mmc_card *card;
@@ -1563,7 +1675,22 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	err = mmc_send_cid(host, cid);
 	if (err)
 		goto err;
+#ifdef CONFIG_MMC_FFU_FUNCTION
+	if (oldcard && (oldcard->state & MMC_QUIRK_FFUED)) {
+		/* After FFU, some fields in CID may change,
+		 * so just copy new CID into card->raw_cid
+		 */
+		memcpy((void *)oldcard->raw_cid, (void *)cid, sizeof(cid));
+		err = mmc_decode_cid(oldcard);
+		if (err)
+			goto free_card;
 
+		card = oldcard;
+		card->nr_parts = 0;
+		oldcard = NULL;
+
+	} else
+#endif
 	if (oldcard) {
 		if (memcmp(cid, oldcard->raw_cid, sizeof(cid)) != 0) {
 			err = -ENOENT;
@@ -1714,7 +1841,11 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		if (!err)
 			card->ext_csd.power_off_notification = EXT_CSD_POWER_ON;
 	}
-
+#ifdef CONFIG_MMC_SPRD_BOOTDEVICE
+	set_bootdevice_cid(cid);
+	set_bootdevice_name(host->parent->driver->name);
+	sprd_bootdevice_cidinfo_get(card);
+#endif
 	/*
 	 * Select timing interface
 	 */
@@ -1803,6 +1934,27 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	if (!oldcard)
 		host->card = card;
 
+#if defined(CONFIG_EMMC_SOFTWARE_CQ_SUPPORT)
+	/*
+	 * Enable Command Queue if supported. Note that Packed Commands cannot
+	 * be used with Command Queue.
+	 */
+	card->ext_csd.cmdq_en = false;
+	if (card->ext_csd.cmdq_support) {
+		err = mmc_select_cmdq(card);
+		if (err && err != -EBADMSG)
+			goto free_card;
+		if (err) {
+			pr_notice("%s: Enabling CMDQ failed\n",
+				mmc_hostname(card->host));
+			card->ext_csd.cmdq_support = false;
+			card->ext_csd.cmdq_depth = 2;
+			err = 0;
+		}
+	}
+#endif
+	create_sdcard_status_node();//Add for sdcard status node.
+
 	return 0;
 
 free_card:
@@ -1811,6 +1963,7 @@ free_card:
 err:
 	return err;
 }
+
 
 static int mmc_can_sleep(struct mmc_card *card)
 {

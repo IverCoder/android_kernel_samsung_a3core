@@ -47,6 +47,10 @@
 
 #include <acpi/ghes.h>
 
+#if IS_ENABLED(CONFIG_SEC_DEBUG)
+#include <linux/sec_debug.h>
+#endif
+
 struct fault_info {
 	int	(*fn)(unsigned long addr, unsigned int esr,
 		      struct pt_regs *regs);
@@ -161,14 +165,24 @@ void show_pte(unsigned long addr)
 	} else {
 		pr_alert("[%016lx] address between user and kernel address ranges\n",
 			 addr);
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+		sec_debug_store_pte((unsigned long)addr, 1);
+#endif
 		return;
 	}
 
 	pr_alert("%s pgtable: %luk pages, %u-bit VAs, pgd = %p\n",
 		 mm == &init_mm ? "swapper" : "user", PAGE_SIZE / SZ_1K,
 		 VA_BITS, mm->pgd);
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	sec_debug_store_pte((unsigned long)mm->pgd, 0);
+#endif
 	pgd = pgd_offset(mm, addr);
 	pr_alert("[%016lx] *pgd=%016llx", addr, pgd_val(*pgd));
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	sec_debug_store_pte((unsigned long)addr, 1);
+	sec_debug_store_pte((unsigned long)pgd_val(*pgd), 2);
+#endif
 
 	do {
 		pud_t *pud;
@@ -180,16 +194,25 @@ void show_pte(unsigned long addr)
 
 		pud = pud_offset(pgd, addr);
 		pr_cont(", *pud=%016llx", pud_val(*pud));
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+		sec_debug_store_pte((unsigned long)pud_val(*pud), 3);
+#endif
 		if (pud_none(*pud) || pud_bad(*pud))
 			break;
 
 		pmd = pmd_offset(pud, addr);
 		pr_cont(", *pmd=%016llx", pmd_val(*pmd));
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+		sec_debug_store_pte((unsigned long)pmd_val(*pmd), 4);
+#endif
 		if (pmd_none(*pmd) || pmd_bad(*pmd))
 			break;
 
 		pte = pte_offset_map(pmd, addr);
 		pr_cont(", *pte=%016llx", pte_val(*pte));
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+		sec_debug_store_pte((unsigned long)pte_val(*pte), 5);
+#endif
 		pte_unmap(pte);
 	} while(0);
 
@@ -293,6 +316,9 @@ static void __do_kernel_fault(unsigned long addr, unsigned int esr,
 		msg = "paging request";
 	}
 
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	sec_debug_store_extc_idx(false);
+#endif
 	pr_alert("Unable to handle kernel %s at virtual address %08lx\n", msg,
 		 addr);
 
@@ -454,6 +480,16 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, addr);
 
 	/*
+	 * let's try a speculative page fault without grabbing the
+	 * mmap_sem.
+	 */
+	fault = handle_speculative_fault(mm, addr, mm_flags);
+	if (fault != VM_FAULT_RETRY) {
+		perf_sw_event(PERF_COUNT_SW_SPF, 1, regs, addr);
+		goto done;
+	}
+
+	/*
 	 * As per x86, we may deadlock here. However, since the kernel only
 	 * validly references user space from well defined areas of the code,
 	 * we can bug out early if this is from code which shouldn't.
@@ -502,6 +538,8 @@ retry:
 		}
 	}
 	up_read(&mm->mmap_sem);
+
+done:
 
 	/*
 	 * Handle the "normal" (no error) case first.
@@ -744,10 +782,16 @@ int handle_guest_sea(phys_addr_t addr, unsigned int esr)
  * Dispatch a data abort to the relevant handler.
  */
 asmlinkage void __exception do_mem_abort(unsigned long addr, unsigned int esr,
+
 					 struct pt_regs *regs)
 {
 	const struct fault_info *inf = esr_to_fault_info(esr);
 	struct siginfo info;
+
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	if (!user_mode(regs))
+		sec_debug_save_fault_info(esr, inf->name, addr, 0UL);
+#endif
 
 	if (!inf->fn(addr, esr, regs))
 		return;
@@ -813,6 +857,10 @@ asmlinkage void __exception do_sp_pc_abort(unsigned long addr,
 	info.si_errno = 0;
 	info.si_code  = BUS_ADRALN;
 	info.si_addr  = (void __user *)addr;
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	sec_debug_save_fault_info(esr, esr_get_class_string(esr),
+			(unsigned long)regs->pc, (unsigned long)regs->sp);
+#endif
 	arm64_notify_die("Oops - SP/PC alignment exception", regs, &info, esr);
 }
 
@@ -856,6 +904,9 @@ asmlinkage int __exception do_debug_exception(unsigned long addr_if_watchpoint,
 	struct siginfo info;
 	int rv;
 
+#if IS_ENABLED(CONFIG_SEC_USER_RESET_DEBUG)
+	sec_debug_save_fault_info(esr, inf->name, addr_if_watchpoint, 0UL);
+#endif
 	/*
 	 * Tell lockdep we disabled irqs in entry.S. Do nothing if they were
 	 * already disabled to preserve the last enabled/disabled addresses.

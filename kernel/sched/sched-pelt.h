@@ -35,7 +35,7 @@ static const u32 runnable_avg_yN_inv[] = {
 
 static const u32 runnable_avg_yN_sum[] = {
 	    0,  980, 1919, 2818, 3679, 4503, 5292, 6048, 6772, 7465, 8129,
-	 8764, 9373, 9956,10514,11048,11560,
+	 8764, 9373, 9956, 10514, 11048, 11560,
 };
 
 #define LOAD_AVG_PERIOD 16

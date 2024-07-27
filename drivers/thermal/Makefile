@@ -2,7 +2,15 @@
 #
 # Makefile for sensor chip drivers.
 #
+# UT kunit test GCOV
 
+ifdef CONFIG_TEST
+GCOV_PROFILE := y
+else
+GCOV_PROFILE := n
+endif
+
+GCOV_PROFILE			= ${CONFIG_SPRD_THERMAL_GCOV}
 obj-$(CONFIG_THERMAL)		+= thermal_sys.o
 thermal_sys-y			+= thermal_core.o thermal_sysfs.o \
 					thermal_helpers.o
@@ -26,6 +34,10 @@ thermal_sys-$(CONFIG_CLOCK_THERMAL)	+= clock_cooling.o
 
 # devfreq cooling
 thermal_sys-$(CONFIG_DEVFREQ_THERMAL) += devfreq_cooling.o
+thermal_sys-$(CONFIG_SPRD_GPU_COOLING_DEVICE) += sprd_gpu_device.o
+
+thermal_sys-$(CONFIG_SPRD_CPU_COOLING)	+= sprd_cpu_cooling.o
+thermal_sys-$(CONFIG_SPRD_CPU_COOLING_DEVICE) += sprd_cpu_device.o
 
 # platform thermal drivers
 obj-y				+= broadcom/
@@ -61,3 +73,17 @@ obj-$(CONFIG_MTK_THERMAL)	+= mtk_thermal.o
 obj-$(CONFIG_GENERIC_ADC_THERMAL)	+= thermal-generic-adc.o
 obj-$(CONFIG_ZX2967_THERMAL)	+= zx2967_thermal.o
 obj-$(CONFIG_UNIPHIER_THERMAL)	+= uniphier_thermal.o
+obj-$(CONFIG_SPRD_THERMAL)	+= sprd_thermal.o
+obj-$(CONFIG_SPRD_THERMAL_R5P0)	+= sprd_thermal_r5p0.o
+obj-$(CONFIG_SPRD_DEDICATE_THERMAL)	+= sprd_dedicate_thm.o
+obj-$(CONFIG_SPRD_CLUSTER0_THERMAL)      += sprd_cluster0_thm.o sprd_thm_comm.o
+obj-$(CONFIG_SPRD_CLUSTER1_THERMAL)      += sprd_cluster1_thm.o
+obj-$(CONFIG_SPRD_SOC_THERMAL)      += sprd_soc_thm.o
+obj-$(CONFIG_SC27XX_TSENSOR_THERMAL)	+= sc27xx_tsensor_thermal.o
+obj-$(CONFIG_SPRD_UMP96XX_TSENSOR)	+= sprd_ump96xx_tsensor.o
+obj-$(CONFIG_SPRD_TEST_THERMAL)	+= sprd_test_thm.o sprd_thm_comm.o
+obj-$(CONFIG_SPRD_VIRTUAL_THERMAL)      += sprd_virtual_thm.o
+obj-$(CONFIG_SPRD_NPU_COOLING_DEVICE) += sprd_npu_cooling.o
+
+# UT kunit test
+obj-$(CONFIG_SPRD_CPU_COOLING_DEVICE_TEST)		+= sprd_cpu_device_test.o

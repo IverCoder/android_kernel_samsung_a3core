@@ -1395,6 +1395,22 @@ config NETFILTER_XT_MATCH_PKTTYPE
 
 	  To compile it as a module, choose M here.  If unsure, say N.
 
+config NETFILTER_XT_MATCH_QTAGUID
+	bool '"quota, tag, owner" match and stats support'
+        depends on NETFILTER_XT_MATCH_SOCKET
+	depends on NETFILTER_XT_MATCH_OWNER=n
+	help
+	  This option replaces the `owner' match. In addition to matching
+	  on uid, it keeps stats based on a tag assigned to a socket.
+	  The full tag is comprised of a UID and an accounting tag.
+	  The tags are assignable to sockets from user space (e.g. a download
+	  manager can assign the socket to another UID for accounting).
+	  Stats and control are done via /proc/net/xt_qtaguid/.
+	  It replaces owner as it takes the same arguments, but should
+	  really be recognized by the iptables tool.
+
+	  If unsure, say `N'.
+
 config NETFILTER_XT_MATCH_QUOTA
 	tristate '"quota" match support'
 	depends on NETFILTER_ADVANCED
@@ -1427,6 +1443,15 @@ config NETFILTER_XT_MATCH_QUOTA2_LOG
 	  It logs similarly to how ipt_ULOG would without data.
 
 	  If unsure, say `N'.
+
+config NETFILTER_XT_MATCH_QUOTA2_LOG_32BIT
+	bool '"quota2" Netfilter LOG support on 32BIT platform'
+	default n
+	help
+	  'ulog_packet_msg' struct has data type 'long' as a member.
+	  When platform using 32BIT arch and Kernel using 64BIT arch,
+	  Thres's a missmatch in data structure.
+	  This option allows `quota2' to log on this situation.
 
 config NETFILTER_XT_MATCH_RATEEST
 	tristate '"rateest" match support'

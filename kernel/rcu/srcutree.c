@@ -414,10 +414,12 @@ static void srcu_gp_start(struct srcu_struct *sp)
 
 	lockdep_assert_held(&sp->lock);
 	WARN_ON_ONCE(ULONG_CMP_GE(sp->srcu_gp_seq, sp->srcu_gp_seq_needed));
+	raw_spin_lock_rcu_node(sdp);  /* Interrupts already disabled. */
 	rcu_segcblist_advance(&sdp->srcu_cblist,
 			      rcu_seq_current(&sp->srcu_gp_seq));
 	(void)rcu_segcblist_accelerate(&sdp->srcu_cblist,
 				       rcu_seq_snap(&sp->srcu_gp_seq));
+	raw_spin_unlock_rcu_node(sdp);  /* Interrupts remain disabled. */
 	smp_mb(); /* Order prior store to ->srcu_gp_seq_needed vs. GP start. */
 	rcu_seq_start(&sp->srcu_gp_seq);
 	state = rcu_seq_state(READ_ONCE(sp->srcu_gp_seq));
@@ -784,6 +786,28 @@ static void srcu_leak_callback(struct rcu_head *rhp)
 }
 
 /*
+ * Workaround check and update current srcu data if need.
+ * Some flow will make task stack data remaining in the srcu data
+ * even after the current task has exited, thus these stack
+ * addresses are inaccessible.
+ */
+void srcu_simple_check_update(struct srcu_data *sdp)
+{
+	unsigned int i = 0;
+	struct rcu_segcblist *rsclp = &sdp->srcu_cblist;
+
+	if (rsclp->len == 0) {
+		for (i = 0; i < RCU_CBLIST_NSEGS; i++) {
+			if (rsclp->tails[i] != &rsclp->head)
+				break;
+		}
+
+		if ((rsclp->head != NULL) || (i != RCU_CBLIST_NSEGS))
+			rcu_segcblist_init(rsclp);
+	}
+}
+
+/*
  * Enqueue an SRCU callback on the srcu_data structure associated with
  * the current CPU and the specified srcu_struct structure, initiating
  * grace-period processing if it is not already running.
@@ -831,6 +855,7 @@ void __call_srcu(struct srcu_struct *sp, struct rcu_head *rhp,
 	local_irq_save(flags);
 	sdp = this_cpu_ptr(sp->sda);
 	raw_spin_lock_rcu_node(sdp);
+	srcu_simple_check_update(sdp);
 	rcu_segcblist_enqueue(&sdp->srcu_cblist, rhp, false);
 	rcu_segcblist_advance(&sdp->srcu_cblist,
 			      rcu_seq_current(&sp->srcu_gp_seq));
@@ -1170,6 +1195,7 @@ static void srcu_invoke_callbacks(struct work_struct *work)
 	rcu_segcblist_insert_count(&sdp->srcu_cblist, &ready_cbs);
 	(void)rcu_segcblist_accelerate(&sdp->srcu_cblist,
 				       rcu_seq_snap(&sp->srcu_gp_seq));
+	srcu_simple_check_update(sdp);
 	sdp->srcu_cblist_invoking = false;
 	more = rcu_segcblist_ready_cbs(&sdp->srcu_cblist);
 	raw_spin_unlock_irq_rcu_node(sdp);

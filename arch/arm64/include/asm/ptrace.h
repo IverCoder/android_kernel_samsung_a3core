@@ -332,6 +332,7 @@ static inline void procedure_link_pointer_set(struct pt_regs *regs,
 
 #undef profile_pc
 extern unsigned long profile_pc(struct pt_regs *regs);
+extern void get_pt_regs(struct pt_regs *regs);
 
 #endif /* __ASSEMBLY__ */
 #endif

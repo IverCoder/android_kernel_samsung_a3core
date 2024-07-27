@@ -446,6 +446,10 @@ int debug_object_activate(void *addr, struct debug_obj_descr *descr)
 			debug_print_object(obj, "activate");
 			state = obj->state;
 			raw_spin_unlock_irqrestore(&db->lock, flags);
+#if IS_ENABLED(CONFIG_SEC_DEBUG)
+			panic("DEBUG OBJECT FREE: address(0x%p) %s (active state %u) object type: %s\n",
+					addr, obj_states[obj->state], obj->astate, descr->name);
+#endif
 			ret = debug_object_fixup(descr->fixup_activate, addr, state);
 			return ret ? 0 : -EINVAL;
 

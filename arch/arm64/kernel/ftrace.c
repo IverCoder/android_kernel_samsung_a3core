@@ -58,7 +58,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned long pc;
 	u32 new;
 
-	pc = (unsigned long)&ftrace_call;
+	pc = (unsigned long)__va_function(ftrace_call);
 	new = aarch64_insn_gen_branch_imm(pc, (unsigned long)func,
 					  AARCH64_INSN_BRANCH_LINK);
 
@@ -152,6 +152,18 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 	bool validate = true;
 	u32 old = 0, new;
 	long offset = (long)pc - (long)addr;
+
+#ifdef CONFIG_CFI_CLANG
+	u32 mod_replaced;
+	/* workaround dynamic ftrace with clang's cfi */
+	if (unlikely(mod)) {
+		if (aarch64_insn_read((void *)pc, &mod_replaced))
+			return -EFAULT;
+		if (!aarch64_insn_is_bl(mod_replaced) || !within_module(pc, mod))
+			return -EINVAL;
+		validate = false;
+	}
+#endif
 
 	if (offset < -SZ_128M || offset >= SZ_128M) {
 #ifdef CONFIG_ARM64_MODULE_PLTS

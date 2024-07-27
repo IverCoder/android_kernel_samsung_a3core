@@ -161,7 +161,6 @@ config FUNCTION_GRAPH_TRACER
 	  the return value. This is done by setting the current return
 	  address on the current task structure into a stack of calls.
 
-
 config PREEMPTIRQ_EVENTS
 	bool "Enable trace events for preempt and irq disable/enable"
 	select TRACE_IRQFLAGS
@@ -222,6 +221,17 @@ config PREEMPT_TRACER
 	  enabled. This option and the irqs-off timing option can be
 	  used together or separately.)
 
+config IRQSOFF_TRACER_BYTEDANCY
+	tristate "Interrupts-off Latency Tracer By Bytedancy"
+	default m
+	help
+	  This option measures the time spent in irqs-off critical
+	  sections with less overhead than IRQSOFF_TRACER configuration
+	  by ByteDancy.
+
+	  More info. can get from github:
+	  https://github.com/bytedance/trace-irqoff
+
 config SCHED_TRACER
 	bool "Scheduling Latency Tracer"
 	select GENERIC_TRACER
@@ -231,6 +241,26 @@ config SCHED_TRACER
 	help
 	  This tracer tracks the latency of the highest priority task
 	  to be scheduled in, starting from the point it has woken up.
+
+config NOSCHEDULE_TRACER_BYTEDANCY
+	tristate "Noschedule Latency Tracer By Bytedancy"
+	default m
+	help
+	  This option measures the time of task running too long in kernel
+	  sapce to schedule latency by ByteDancy.
+
+	  Get more info. from:
+	  github: https://github.com/bytedance/trace-noschedule
+
+config RUNQLAT_TRACER_BYTEDANCY
+	tristate "Run Queue Latency Tracer By Bytedance"
+	default m
+	help
+	  This tracer tracks the latency of target task in runqueue, from
+	  enqueue to running due to exe time of prior running tasks.
+
+	  Get more info. from:
+	  https://github.com/bytedance/trace-runqlat.
 
 config HWLAT_TRACER
 	bool "Tracer to detect hardware latencies (like SMIs)"
@@ -714,6 +744,19 @@ config TRACING_EVENTS_GPIO
 	default y
 	help
 	  Enable tracing events for gpio subsystem
+
+config SPRD_FTRACE_GCOV
+	bool "open gcov for ftrace"
+	depends on GCOV_PROFILE_MODULES
+	help
+	  Say Y here to enable gcov for ftrace
+
+config SPRD_KTP
+	bool "Register ktp"
+	default n
+	help
+	  The KTP(kernel trace point) is used to log discrete events in system
+	  in a buffer that can be post processed from sysdumps.
 
 endif # FTRACE
 

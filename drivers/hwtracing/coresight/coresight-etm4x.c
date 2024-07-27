@@ -85,6 +85,8 @@ static bool etm4_arch_supported(u8 arch)
 	switch (arch & 0xf0) {
 	case ETM_ARCH_V4:
 		break;
+	case ETM_ARCH_V4_2:
+		break;
 	default:
 		return false;
 	}
@@ -114,6 +116,13 @@ static int etm4_enable_hw(struct etmv4_drvdata *drvdata)
 {
 	int i, rc;
 	struct etmv4_config *config = &drvdata->config;
+
+	/* set cs clock as the max one */
+	if ( (rc = clk_set_parent(drvdata->clk_cs, drvdata->clk_cs_src)) )
+		return rc;
+
+	if ( (rc = clk_prepare_enable(drvdata->clk_cs)) )
+		return rc;
 
 	CS_UNLOCK(drvdata->base);
 
@@ -425,8 +434,10 @@ static int etm4_enable_sysfs(struct coresight_device *csdev)
 	arg.drvdata = drvdata;
 	ret = smp_call_function_single(drvdata->cpu,
 				       etm4_enable_hw_smp_call, &arg, 1);
+
 	if (!ret)
 		ret = arg.rc;
+
 	if (!ret)
 		drvdata->sticky_enable = true;
 	spin_unlock(&drvdata->spinlock);
@@ -496,6 +507,9 @@ static void etm4_disable_hw(void *info)
 	coresight_disclaim_device_unlocked(drvdata->base);
 
 	CS_LOCK(drvdata->base);
+
+	/* unprepare cs clock */
+	clk_disable_unprepare(drvdata->clk_cs);
 
 	dev_dbg(drvdata->dev, "cpu: %d disable smp call done\n", drvdata->cpu);
 }
@@ -763,7 +777,8 @@ static void etm4_set_default_config(struct etmv4_config *config)
 	config->stall_ctrl = 0x0;
 
 	/* enable trace synchronization every 4096 bytes, if available */
-	config->syncfreq = 0xC;
+//	config->syncfreq = 0xC;
+	config->syncfreq = 0x8;
 
 	/* disable timestamp event */
 	config->ts_ctrl = 0x0;
@@ -1391,6 +1406,35 @@ static int etm4_cpu_pm_register(void) { return 0; }
 static void etm4_cpu_pm_unregister(void) { }
 #endif
 
+int etm4_enable_source_show(struct device *dev)
+{
+	int val;
+	struct etmv4_drvdata *drvdata = dev_get_drvdata(dev);
+
+	if (drvdata == NULL)
+		return 0;
+
+	val = coresight_enable_source_show_export(drvdata->csdev);
+
+	return val;
+}
+
+int etm4_enable_source_store(struct device *dev, int val)
+{
+	int ret;
+	struct etmv4_drvdata *drvdata = dev_get_drvdata(dev);
+
+	if (drvdata == NULL)
+		return -1;
+
+	if (val)
+		ret = coresight_enable_source_store_export(drvdata->csdev, true);
+	else
+		ret = coresight_enable_source_store_export(drvdata->csdev, false);
+
+	return ret;
+}
+
 static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 {
 	int ret;
@@ -1433,6 +1477,19 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 		return PTR_ERR(base);
 
 	drvdata->base = base;
+
+	/* get coresight and timestamp clock source */
+	drvdata->clk_cs = devm_clk_get(dev, "clk_cs");
+	if (IS_ERR(drvdata->clk_cs)) {
+		drvdata->clk_cs = NULL;
+		dev_warn(dev, "There is no etm clock.\n");
+	}
+
+	drvdata->clk_cs_src = devm_clk_get(dev, "cs_src");
+	if (IS_ERR(drvdata->clk_cs_src)) {
+		drvdata->clk_cs_src = NULL;
+		dev_warn(dev, "There is no etm source clock.\n");
+	}
 
 	spin_lock_init(&drvdata->spinlock);
 
@@ -1519,9 +1576,12 @@ err_arch_supported:
 
 static const struct amba_id etm4_ids[] = {
 	ETM4x_AMBA_ID(0x000bb95d),		/* Cortex-A53 */
+	ETM4x_AMBA_ID(0x000bbd05),		/* Cortex-A55 Ananke */
 	ETM4x_AMBA_ID(0x000bb95e),		/* Cortex-A57 */
 	ETM4x_AMBA_ID(0x000bb95a),		/* Cortex-A72 */
 	ETM4x_AMBA_ID(0x000bb959),		/* Cortex-A73 */
+	ETM4x_AMBA_ID(0x000bbd0a),		/* Cortex-A75 Promethus */
+	ETM4x_AMBA_ID(0x000bbd0b),		/* Cortex-A76 Enyo */
 	ETM4x_AMBA_ID(0x000bb9da),		/* Cortex-A35 */
 	{},
 };

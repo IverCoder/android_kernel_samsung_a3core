@@ -127,6 +127,7 @@ config ARM64
 	select SPARSE_IRQ
 	select SYSCTL_EXCEPTION_TRACE
 	select THREAD_INFO_IN_TASK
+	select ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -264,6 +265,24 @@ source "init/Kconfig"
 source "kernel/Kconfig.freezer"
 
 source "arch/arm64/Kconfig.platforms"
+
+if ARCH_SPRD
+
+menu "CPU info trans to compiler"
+
+config SPRD_CPU_ARCH
+       string "Architecture info for compiler"
+       help
+         Transfer the architecture info to compiler by "-march" flag.
+
+config SPRD_CPU_TYPE
+       string "CPU type info for compiler"
+       help
+         Transfer the cpu type info to compiler by "-mcpu" flag.
+
+endmenu
+
+endif
 
 menu "Bus support"
 
@@ -804,7 +823,7 @@ config FORCE_MAX_ZONEORDER
 	int
 	default "14" if (ARM64_64K_PAGES && TRANSPARENT_HUGEPAGE)
 	default "12" if (ARM64_16K_PAGES && TRANSPARENT_HUGEPAGE)
-	default "11"
+	default "12"
 	help
 	  The kernel memory allocator divides physically contiguous memory
 	  blocks into "zones", where each zone is a power of two number of
@@ -1040,6 +1059,12 @@ config ARM64_PMEM
 	  operations if DC CVAP is not supported (following the behaviour of
 	  DC CVAP itself if the system does not define a point of persistence).
 
+config SPRD_ARM64_PMU_GCOV
+	bool "open gcov for arm64_pmu"
+	depends on GCOV_PROFILE_MODULES
+	help
+	  Say Y here to enable gcov for arm64_pmu
+
 endmenu
 
 config ARM64_MODULE_CMODEL_LARGE
@@ -1208,6 +1233,12 @@ config BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES
 	help
 	  Space separated list of names of dtbs to append when
 	  building a concatenated Image.gz-dtb.
+
+config BUILD_ARM64_DTC
+	string "dtc to use"
+
+config BUILD_ARM64_DTC_FLAGS
+	string "extra dtc flags"
 
 endmenu
 

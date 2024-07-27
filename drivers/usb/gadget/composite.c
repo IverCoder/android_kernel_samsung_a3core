@@ -807,6 +807,10 @@ static int set_config(struct usb_composite_dev *cdev,
 	unsigned		power = gadget_is_otg(gadget) ? 8 : 100;
 	int			tmp;
 
+	if (gadget->state == USB_STATE_CONFIGURED && cdev->config &&
+	    cdev->config->bConfigurationValue == number)
+		return 0;
+
 	if (number) {
 		list_for_each_entry(c, &cdev->configs, list) {
 			if (c->bConfigurationValue == number) {
@@ -1625,6 +1629,18 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	struct usb_function		*f = NULL;
 	u8				endp;
 
+	if (w_length > USB_COMP_EP0_BUFSIZ) {
+		if (ctrl->bRequestType == USB_DIR_OUT) {
+			goto done;
+		} else {
+			/* Cast away the const, we are going to overwrite on purpose. */
+			__le16 *temp = (__le16 *)&ctrl->wLength;
+
+			*temp = cpu_to_le16(USB_COMP_EP0_BUFSIZ);
+			w_length = USB_COMP_EP0_BUFSIZ;
+		}
+	}
+
 	/* partial re-init of the response message; the function or the
 	 * gadget might need to intercept e.g. a control-OUT completion
 	 * when we delegate to it.
@@ -1918,6 +1934,9 @@ unknown:
 				if (w_index != 0x5 || (w_value >> 8))
 					break;
 				interface = w_value & 0xFF;
+				if (interface >= MAX_CONFIG_INTERFACES ||
+				    !os_desc_cfg->interface[interface])
+					break;
 				buf[6] = w_index;
 				if (w_length == 0x0A) {
 					count = count_ext_prop(os_desc_cfg,
@@ -2005,9 +2024,11 @@ unknown:
 			break;
 		}
 try_fun_setup:
-		if (f && f->setup)
+		if (f && f->setup) {
+			spin_lock(&cdev->lock);
 			value = f->setup(f, ctrl);
-		else {
+			spin_unlock(&cdev->lock);
+		} else {
 			struct usb_configuration	*c;
 
 			c = cdev->config;
@@ -2025,8 +2046,11 @@ try_fun_setup:
 				goto done;
 			f = list_first_entry(&c->functions, struct usb_function,
 					     list);
-			if (f->setup)
+			if (f->setup) {
+				spin_lock(&cdev->lock);
 				value = f->setup(f, ctrl);
+				spin_unlock(&cdev->lock);
+			}
 		}
 
 		goto done;
@@ -2175,7 +2199,7 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	if (!cdev->req)
 		return -ENOMEM;
 
-	cdev->req->buf = kmalloc(USB_COMP_EP0_BUFSIZ, GFP_KERNEL);
+	cdev->req->buf = kzalloc(USB_COMP_EP0_BUFSIZ, GFP_KERNEL);
 	if (!cdev->req->buf)
 		goto fail;
 
@@ -2321,6 +2345,10 @@ void composite_suspend(struct usb_gadget *gadget)
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 	struct usb_function		*f;
 
+	if (cdev == NULL) {
+		WARN(1, "%s: calling on a Gadget disconnected\n", __func__);
+		return;
+	}
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
 	 */
@@ -2346,6 +2374,10 @@ void composite_resume(struct usb_gadget *gadget)
 	struct usb_function		*f;
 	unsigned			maxpower;
 
+	if (cdev == NULL) {
+		WARN(1, "%s: calling on a Gadget disconnected\n", __func__);
+		return;
+	}
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
 	 */

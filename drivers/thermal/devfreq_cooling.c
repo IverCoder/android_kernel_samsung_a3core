@@ -27,8 +27,10 @@
 #include <linux/thermal.h>
 
 #include <trace/events/thermal.h>
+#include <trace/events/power.h>
 
 #define SCALE_ERROR_MITIGATION 100
+#define FTRACE_LIMIT_FREQ_NAME "thermal-devfreq-limit"
 
 static DEFINE_IDA(devfreq_ida);
 
@@ -389,6 +391,8 @@ static int devfreq_cooling_power2state(struct thermal_cooling_device *cdev,
 	*state = i;
 	dfc->capped_state = i;
 	trace_thermal_power_devfreq_limit(cdev, freq, *state, power);
+	trace_clock_set_rate(FTRACE_LIMIT_FREQ_NAME, freq,
+						raw_smp_processor_id());
 	return 0;
 }
 

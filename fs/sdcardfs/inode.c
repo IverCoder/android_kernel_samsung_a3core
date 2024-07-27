@@ -533,7 +533,7 @@ static const char *sdcardfs_follow_link(struct dentry *dentry, void **cookie)
 
 static int sdcardfs_permission_wrn(struct inode *inode, int mask)
 {
-	WARN_RATELIMIT(1, "sdcardfs does not support permission. Use permission2.\n");
+	WARN_RATELIMIT(0, "sdcardfs does not support permission. Use permission2.\n");
 	return -EINVAL;
 }
 
@@ -594,7 +594,7 @@ static int sdcardfs_permission(struct vfsmount *mnt, struct inode *inode, int ma
 
 static int sdcardfs_setattr_wrn(struct dentry *dentry, struct iattr *ia)
 {
-	WARN_RATELIMIT(1, "sdcardfs does not support setattr. User setattr2.\n");
+	WARN_RATELIMIT(0, "sdcardfs does not support setattr. User setattr2.\n");
 	return -EINVAL;
 }
 
@@ -781,8 +781,12 @@ static int sdcardfs_getattr(const struct path *path, struct kstat *stat,
 	err = vfs_getattr(&lower_path, &lower_stat, request_mask, flags);
 	if (err)
 		goto out;
+	inode_lock(d_inode(dentry));
 	sdcardfs_copy_and_fix_attrs(d_inode(dentry),
 			      d_inode(lower_path.dentry));
+	fsstack_copy_inode_size(d_inode(dentry),
+			      d_inode(lower_path.dentry));
+	inode_unlock(d_inode(dentry));
 	err = sdcardfs_fillattr(mnt, d_inode(dentry), &lower_stat, stat);
 out:
 	sdcardfs_put_lower_path(dentry, &lower_path);

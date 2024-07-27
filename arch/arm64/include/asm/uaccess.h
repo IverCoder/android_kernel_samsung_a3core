@@ -25,6 +25,7 @@
 /*
  * User space memory access functions
  */
+#include <linux/sched.h>
 #include <linux/bitops.h>
 #include <linux/kasan-checks.h>
 #include <linux/string.h>

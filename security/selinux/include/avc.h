@@ -16,9 +16,12 @@
 #include <linux/audit.h>
 #include <linux/lsm_audit.h>
 #include <linux/in6.h>
+#include <linux/avc_backtrace.h>
 #include "flask.h"
 #include "av_permissions.h"
 #include "security.h"
+
+#define SI_KERNEL_AVC 888
 
 /*
  * An entry in the AVC.
@@ -132,9 +135,32 @@ static inline int avc_audit(struct selinux_state *state,
 			    int flags)
 {
 	u32 audited, denied;
+	int i;
+	siginfo_t info;
+
+	memset(&info, 0, sizeof(siginfo_t));
+	info.si_signo = AVC_BACKTRACE_SIGNAL;
+	info.si_code = SI_KERNEL_AVC;
 	audited = avc_audit_required(requested, avd, result, 0, &denied);
 	if (likely(!audited))
 		return 0;
+	if (avc_backtrace_enable == 1) {
+		if (avc_dump_all == 1) {
+			kill_pid_info(AVC_BACKTRACE_SIGNAL, &info, find_vpid(current->pid));
+			dump_stack();
+		} else {
+			for (i = 0; i < AVC_BACKTRACE_COMM_NUM; i++) {
+				if (avc_backtrace_filter_ele[i]) {
+					if (!strcmp(current->comm, avc_backtrace_filter_ele[i])
+					|| (!strcmp(avc_backtrace_filter_ele[i], "Binder")
+					&& !strncmp(current->comm, "Binder", 6))) {
+						kill_pid_info(AVC_BACKTRACE_SIGNAL, &info, find_vpid(current->pid));
+						dump_stack();
+					}
+				}
+			}
+		}
+	}
 	return slow_avc_audit(state, ssid, tsid, tclass,
 			      requested, audited, denied, result,
 			      a, flags);
