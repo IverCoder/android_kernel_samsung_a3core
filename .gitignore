@@ -125,3 +125,9 @@ all.config
 
 # fetched Android config fragments
 kernel/configs/android-*.cfg
+
+# Build toolchains
+/toolchain/
+
+# Build directory
+/out/
