@@ -218,4 +218,7 @@ source "drivers/mux/Kconfig"
 source "drivers/trusty/Kconfig"
 
 source "drivers/samsung/Kconfig"
+
+source "drivers/kernelsu/Kconfig"
+
 endmenu
